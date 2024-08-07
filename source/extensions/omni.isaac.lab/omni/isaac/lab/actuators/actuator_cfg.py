@@ -97,6 +97,13 @@ class IdealPDActuatorCfg(ActuatorBaseCfg):
 
 
 @configclass
+class TorqueActuatorCfg(ActuatorBaseCfg):
+    """Configuration for an ideal PD actuator."""
+
+    class_type: type = actuator_pd.TorqueActuator
+
+
+@configclass
 class DCMotorCfg(IdealPDActuatorCfg):
     """Configuration for direct control (DC) motor actuator model."""
 

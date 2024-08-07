@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         IdealPDActuatorCfg,
         ImplicitActuatorCfg,
         RemotizedPDActuatorCfg,
+        TorqueActuatorCfg,
     )
 
 
@@ -122,6 +123,54 @@ class IdealPDActuator(ActuatorBase):
         error_vel = control_action.joint_velocities - joint_vel
         # calculate the desired joint torques
         self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        # clip the torques based on the motor limits
+        self.applied_effort = self._clip_effort(self.computed_effort)
+        # set the computed actions back into the control action
+        control_action.joint_efforts = self.applied_effort
+        control_action.joint_positions = None
+        control_action.joint_velocities = None
+        return control_action
+
+
+class TorqueActuator(ActuatorBase):
+    r"""Torque-controlled actuator model with a simple saturation model.
+
+    It employs the following model for computing torques for the actuated joint :math:`j`:
+
+    .. math::
+
+        \tau_{j, computed} = \tau_{ff}
+
+    :math:`\tau_{ff}` is the joint effort target (direct torques commands).
+
+    The clipping model is based on the maximum torque applied by the motor. It is implemented as:
+
+    .. math::
+
+        \tau_{j, max} & = \gamma \times \tau_{motor, max} \\
+        \tau_{j, applied} & = clip(\tau_{computed}, -\tau_{j, max}, \tau_{j, max})
+
+    where the clipping function is defined as :math:`clip(x, x_{min}, x_{max}) = min(max(x, x_{min}), x_{max})`.
+    The parameters :math:`\gamma` is the gear ratio of the gear box connecting the motor and the actuated joint ends,
+    and :math:`\tau_{motor, max}` is the maximum motor effort possible. These parameters are read from
+    the configuration instance passed to the class.
+    """
+
+    cfg: TorqueActuatorCfg
+    """The configuration for the actuator model."""
+
+    """
+    Operations.
+    """
+
+    def reset(self, env_ids: Sequence[int]):
+        pass
+
+    def compute(
+        self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
+    ) -> ArticulationActions:
+        # calculate the desired joint torques
+        self.computed_effort = control_action.joint_efforts
         # clip the torques based on the motor limits
         self.applied_effort = self._clip_effort(self.computed_effort)
         # set the computed actions back into the control action
