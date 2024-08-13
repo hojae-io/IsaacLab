@@ -20,6 +20,7 @@ from omni.isaac.lab.managers import CommandManager, CurriculumManager, RewardMan
 from .common import VecEnvStepReturn
 from .manager_based_env import ManagerBasedEnv
 from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
+from omni.isaac.lab.devices import BaseKeyboard
 
 
 class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
@@ -81,6 +82,13 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         self.common_step_counter = 0
         # -- init buffers
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+        self.screenshot = False
+        self.record = False
+
+        if self.sim.has_gui():
+            self._setup_keyboard_interface()
+            print(self.keyboard_interface, '\n')
+        
         print("[INFO]: Completed setting up the environment...")
 
     """
@@ -168,18 +176,17 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
             self.scene.write_data_to_sim()
             # simulate
             self.sim.step(render=False)
-            # render between steps only if the GUI or an RTX sensor needs it
-            # note: we assume the render interval to be the shortest accepted rendering interval.
-            #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
-            if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
-                self.sim.render()
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
+
+        if is_rendering:
+            self.sim.render()
 
         # post-step:
         # -- update env counters (used for curriculum generation)
         self.episode_length_buf += 1  # step in current episode (per env)
         self.common_step_counter += 1  # total step (common for all envs)
+        self._post_physics_step_callback()
         # -- check terminations
         self.reset_buf = self.termination_manager.compute()
         self.reset_terminated = self.termination_manager.terminated
@@ -202,6 +209,13 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+
+    def _post_physics_step_callback(self):
+        """Callback function called after each physics step."""
+        pass
+    
+    def _setup_keyboard_interface(self):
+        self.keyboard_interface = BaseKeyboard(self)
 
     def render(self, recompute: bool = False) -> np.ndarray | None:
         """Run rendering without stepping through the physics.
@@ -243,21 +257,13 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
                 )
             # create the annotator if it does not exist
             if not hasattr(self, "_rgb_annotator"):
-                import omni.replicator.core as rep
-
-                # create render product
-                self._render_product = rep.create.render_product(
-                    self.cfg.viewer.cam_prim_path, self.cfg.viewer.resolution
-                )
-                # create rgb annotator -- used to read data from the render product
-                self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
-                self._rgb_annotator.attach([self._render_product])
+                self._create_rgb_annotator()
             # obtain the rgb data
             rgb_data = self._rgb_annotator.get_data()
             # convert to numpy array
             rgb_data = np.frombuffer(rgb_data, dtype=np.uint8).reshape(*rgb_data.shape)
             # return the rgb data
-            # note: initially the renerer is warming up and returns empty data
+            # note: initially the renderer is warming up and returns empty data
             if rgb_data.size == 0:
                 return np.zeros((self.cfg.viewer.resolution[1], self.cfg.viewer.resolution[0], 3), dtype=np.uint8)
             else:

@@ -152,20 +152,26 @@ class UniformVelocityCommand(CommandTerm):
                 # -- goal
                 marker_cfg = GREEN_ARROW_X_MARKER_CFG.copy()
                 marker_cfg.prim_path = "/Visuals/Command/velocity_goal"
-                marker_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+                marker_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
                 self.base_vel_goal_visualizer = VisualizationMarkers(marker_cfg)
+                self.base_yaw_vel_goal_visualizer = VisualizationMarkers(marker_cfg)
                 # -- current
                 marker_cfg = BLUE_ARROW_X_MARKER_CFG.copy()
                 marker_cfg.prim_path = "/Visuals/Command/velocity_current"
-                marker_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+                marker_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
                 self.base_vel_visualizer = VisualizationMarkers(marker_cfg)
+                self.base_yaw_vel_visualizer = VisualizationMarkers(marker_cfg)
             # set their visibility to true
             self.base_vel_goal_visualizer.set_visibility(True)
+            self.base_yaw_vel_goal_visualizer.set_visibility(True)
             self.base_vel_visualizer.set_visibility(True)
+            self.base_yaw_vel_visualizer.set_visibility(True)
         else:
             if hasattr(self, "base_vel_goal_visualizer"):
                 self.base_vel_goal_visualizer.set_visibility(False)
+                self.base_yaw_vel_goal_visualizer.set_visibility(False)
                 self.base_vel_visualizer.set_visibility(False)
+                self.base_yaw_vel_visualizer.set_visibility(False)
 
     def _debug_vis_callback(self, event):
         # check if robot is initialized
@@ -178,10 +184,14 @@ class UniformVelocityCommand(CommandTerm):
         base_pos_w[:, 2] += 0.5
         # -- resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self._resolve_xy_velocity_to_arrow(self.command[:, :2])
+        yaw_vel_des_arrow_scale, yaw_vel_des_arrow_quat = self._resolve_yaw_velocity_to_arrow(self.command[:, 2])
         vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b[:, :2])
+        yaw_vel_arrow_scale, yaw_vel_arrow_quat = self._resolve_yaw_velocity_to_arrow(self.robot.data.root_ang_vel_b[:, 2])
         # display markers
         self.base_vel_goal_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
+        self.base_yaw_vel_goal_visualizer.visualize(base_pos_w, yaw_vel_des_arrow_quat, yaw_vel_des_arrow_scale)
         self.base_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
+        self.base_yaw_vel_visualizer.visualize(base_pos_w, yaw_vel_arrow_quat, yaw_vel_arrow_scale)
 
     """
     Internal helpers.
@@ -198,6 +208,23 @@ class UniformVelocityCommand(CommandTerm):
         heading_angle = torch.atan2(xy_velocity[:, 1], xy_velocity[:, 0])
         zeros = torch.zeros_like(heading_angle)
         arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
+        # convert everything back from base to world frame
+        base_quat_w = self.robot.data.root_quat_w
+        arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
+
+        return arrow_scale, arrow_quat
+    
+    def _resolve_yaw_velocity_to_arrow(self, yaw_velocity: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Converts the yaw base velocity command to arrow direction rotation."""
+        # obtain default scale of the marker
+        default_scale = self.base_yaw_vel_goal_visualizer.cfg.markers["arrow"].scale
+        # arrow-scale
+        arrow_scale = torch.tensor(default_scale, device=self.device).repeat(yaw_velocity.shape[0], 1)
+        arrow_scale[:, 0] *= yaw_velocity * 3.0
+        # arrow-direction
+        zeros = torch.zeros_like(yaw_velocity)
+        rotateY = -torch.pi/2 * torch.ones_like(yaw_velocity)
+        arrow_quat = math_utils.quat_from_euler_xyz(zeros, rotateY, zeros)
         # convert everything back from base to world frame
         base_quat_w = self.robot.data.root_quat_w
         arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
