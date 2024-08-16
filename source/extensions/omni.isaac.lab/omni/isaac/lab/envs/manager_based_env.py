@@ -304,6 +304,9 @@ class ManagerBasedEnv:
         try:
             import omni.replicator.core as rep
 
+            if seed == -1:
+                seed = np.random.randint(0, 10000)
+
             rep.set_global_seed(seed)
         except ModuleNotFoundError:
             pass
