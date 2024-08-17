@@ -73,7 +73,7 @@ class RslRlVecEnvWrapper(VecEnv):
         else:
             self.num_actions = self.unwrapped.num_actions
         if hasattr(self.unwrapped, "observation_manager"):
-            self.num_obs = self.unwrapped.observation_manager.group_obs_dim["policy"][0]
+            self.num_obs = self.unwrapped.observation_manager.group_obs_dim["actor"][0]
         else:
             self.num_obs = self.unwrapped.num_observations
         # -- privileged observations
@@ -143,13 +143,13 @@ class RslRlVecEnvWrapper(VecEnv):
     Properties
     """
 
-    def get_observations(self) -> tuple[torch.Tensor, dict]:
+    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Returns the current observations of the environment."""
         if hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
         else:
             obs_dict = self.unwrapped._get_observations()
-        return obs_dict["policy"], {"observations": obs_dict}
+        return obs_dict["actor"], obs_dict["critic"]
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -172,27 +172,24 @@ class RslRlVecEnvWrapper(VecEnv):
     def seed(self, seed: int = -1) -> int:  # noqa: D102
         return self.unwrapped.seed(seed)
 
-    def reset(self) -> tuple[torch.Tensor, dict]:  # noqa: D102
+    def reset(self) -> tuple[torch.Tensor, torch.Tensor]:  # noqa: D102
         # reset the environment
         obs_dict, _ = self.env.reset()
         # return observations
-        return obs_dict["policy"], {"observations": obs_dict}
+        return obs_dict["actor"], obs_dict["critic"]
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
         obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
         dones = (terminated | truncated).to(dtype=torch.long)
-        # move extra observations to the extras dict
-        obs = obs_dict["policy"]
-        extras["observations"] = obs_dict
         # move time out information to the extras dict
         # this is only needed for infinite horizon tasks
         if not self.unwrapped.cfg.is_finite_horizon:
             extras["time_outs"] = truncated
 
         # return the step information
-        return obs, rew, dones, extras
+        return obs_dict, rew, dones, extras
 
     def close(self):  # noqa: D102
         return self.env.close()
