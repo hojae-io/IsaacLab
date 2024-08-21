@@ -181,6 +181,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
         if is_rendering:
             self.sim.render()
+            self._visualization()
 
         # post-step:
         # -- update env counters (used for curriculum generation)
@@ -212,6 +213,10 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
     def _post_physics_step_callback(self):
         """Callback function called after each physics step."""
+        pass
+
+    def _visualization(self):
+        """Visualization callback for rendering."""
         pass
     
     def _setup_keyboard_interface(self):
