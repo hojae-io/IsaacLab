@@ -64,7 +64,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
     cfg: ManagerBasedRLEnvCfg
     """Configuration for the environment."""
 
-    def __init__(self, cfg: ManagerBasedRLEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: ManagerBasedRLEnvCfg, seed: int = -1, render_mode: str | None = None, **kwargs):
         """Initialize the environment.
 
         Args:
@@ -73,7 +73,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
                 is similar to ``"human"``.
         """
         # initialize the base class to setup the scene.
-        super().__init__(cfg=cfg)
+        super().__init__(cfg=cfg, seed=seed)
         # store the render mode
         self.render_mode = render_mode
 

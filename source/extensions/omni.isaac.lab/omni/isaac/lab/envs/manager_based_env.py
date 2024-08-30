@@ -60,7 +60,7 @@ class ManagerBasedEnv:
     querying the :attr:`physics_dt` and the :attr:`step_dt` properties respectively.
     """
 
-    def __init__(self, cfg: ManagerBasedEnvCfg):
+    def __init__(self, cfg: ManagerBasedEnvCfg, seed: int = -1):
         """Initialize the environment.
 
         Args:
@@ -74,6 +74,8 @@ class ManagerBasedEnv:
         self.cfg = cfg
         # initialize internal variables
         self._is_closed = False
+        # set the seed
+        self.seed(seed)
 
         # create a simulation context to control the simulator
         if SimulationContext.instance() is None:
