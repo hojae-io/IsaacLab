@@ -796,6 +796,30 @@ def reset_joints_by_offset(
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
+def reset_joints_by_range(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    position_range: torch.Tensor,
+    velocity_range: torch.Tensor,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the robot joints by sampling random values from the given ranges.
+
+    This function samples random values from the given ranges and sets them into the physics simulation.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    position_range = position_range.to(asset.device)
+    velocity_range = velocity_range.to(asset.device)
+
+    # get default joint state
+    joint_pos = math_utils.sample_uniform(position_range[..., 0], position_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+    joint_vel = math_utils.sample_uniform(velocity_range[..., 0], velocity_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+
+    # set into the physics simulation
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+    
 
 def reset_scene_to_default(env: ManagerBasedEnv, env_ids: torch.Tensor):
     """Reset the scene to the default state specified in the scene configuration."""
