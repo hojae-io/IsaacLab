@@ -167,6 +167,8 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # note: checked here once to avoid multiple checks within the loop
         is_rendering = self.sim.has_gui() or self.sim.has_rtx_sensors()
 
+        self._pre_physics_step_callback()
+
         # perform physics stepping
         for _ in range(self.cfg.decimation):
             self._sim_step_counter += 1
@@ -210,6 +212,10 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+
+    def _pre_physics_step_callback(self):
+        """Callback function called before each physics step."""
+        pass
 
     def _post_physics_step_callback(self):
         """Callback function called after each physics step."""
