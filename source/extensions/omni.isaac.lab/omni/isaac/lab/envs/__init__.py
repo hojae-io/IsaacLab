@@ -45,3 +45,5 @@ from .manager_based_rl_env import ManagerBasedRLEnv
 from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
 
 from extensions.humanoid.task import *
+from extensions.pendulum.task import *
+from extensions.cartpole.task import *
