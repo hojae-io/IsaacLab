@@ -31,6 +31,9 @@ class RslRlPpoActorCriticCfg:
     normalize_obs: bool = MISSING
     """Whether to normalize observations."""
 
+    custom_initialization: bool = MISSING
+    """Whether to use custom initialization."""
+
 
 @configclass
 class RslRlPpoAlgorithmCfg:
