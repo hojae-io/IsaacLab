@@ -25,6 +25,7 @@ if TYPE_CHECKING:
         TorqueActuatorCfg,
     )
 
+from .jacobian import apply_coupling
 
 """
 Implicit Actuator Models.
@@ -118,11 +119,17 @@ class IdealPDActuator(ActuatorBase):
     def compute(
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
     ) -> ArticulationActions:
-        # compute errors
-        error_pos = control_action.joint_positions - joint_pos
-        error_vel = control_action.joint_velocities - joint_vel
-        # calculate the desired joint torques
-        self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        if self.cfg.apply_humanoid_jacobian:
+            self.computed_effort = apply_coupling(joint_pos, joint_vel,
+                                                  control_action.joint_positions, control_action.joint_velocities,
+                                                  self.stiffness, self.damping, control_action.joint_efforts)
+        else:
+            # compute errors
+            error_pos = control_action.joint_positions - joint_pos
+            error_vel = control_action.joint_velocities - joint_vel
+            # calculate the desired joint torques
+            self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        
         # clip the torques based on the motor limits
         self.applied_effort = self._clip_effort(self.computed_effort)
         # set the computed actions back into the control action
