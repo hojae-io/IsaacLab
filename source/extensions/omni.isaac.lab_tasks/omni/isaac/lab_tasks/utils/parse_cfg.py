@@ -194,6 +194,8 @@ def get_checkpoint_path(
         # create last run file path
         if other_dirs is not None:
             run_path = os.path.join(log_path, runs[-1], *other_dirs)
+        elif run_dir != '.*':
+            run_path = os.path.join(log_path, run_dir)
         else:
             run_path = os.path.join(log_path, runs[-1])
     except IndexError:
