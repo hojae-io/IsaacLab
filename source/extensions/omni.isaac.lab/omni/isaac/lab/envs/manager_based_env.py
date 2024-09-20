@@ -185,7 +185,8 @@ class ManagerBasedEnv:
     """
 
     def _init_buffers(self):
-        pass
+        self.robot = self.scene["robot"]
+        self.total_weight = self.robot.root_physx_view.get_masses().sum(dim=1).to(self.device) * (-self.cfg.sim.gravity[2])
 
     def load_managers(self):
         """Load the managers for the environment.
