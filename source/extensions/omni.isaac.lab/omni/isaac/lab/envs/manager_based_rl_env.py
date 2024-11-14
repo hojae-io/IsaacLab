@@ -181,7 +181,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
 
-        if is_rendering:
+        if is_rendering and self.common_step_counter % 2 == 0:
             self.sim.render()
             self._visualization()
 
