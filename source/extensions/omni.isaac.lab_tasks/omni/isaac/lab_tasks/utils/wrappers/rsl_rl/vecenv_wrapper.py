@@ -137,7 +137,7 @@ class RslRlVecEnvWrapper(VecEnv):
     @property
     def viewport_camera_image(self) -> np.ndarray:
         """Returns the viewport camera image."""
-        return self.env.get_viewport_camera_image()
+        return self.unwrapped.get_viewport_camera_image()
 
     """
     Properties
