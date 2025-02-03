@@ -34,3 +34,6 @@ use_online_index=true
 
 [[python.module]]
 name = "isaaclab"
+
+[core]
+reloadable = false
