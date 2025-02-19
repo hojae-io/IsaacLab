@@ -21,7 +21,6 @@ from isaaclab.ui.widgets import ManagerLiveVisualizer
 from .common import VecEnvStepReturn
 from .manager_based_env import ManagerBasedEnv
 from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
-from isaaclab.devices import BaseKeyboard
 
 
 class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
@@ -262,7 +261,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         pass
 
     def _setup_keyboard_interface(self):
-        self.keyboard_interface = BaseKeyboard(self)
+        self.keyboard_interface = None
 
     def render(self, recompute: bool = False) -> np.ndarray | None:
         """Run rendering without stepping through the physics.
