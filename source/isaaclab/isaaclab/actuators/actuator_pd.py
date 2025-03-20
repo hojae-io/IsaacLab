@@ -127,6 +127,18 @@ class IdealPDActuator(ActuatorBase):
     Operations.
     """
 
+    def __init__(self, cfg, joint_names, joint_ids, num_envs, device, stiffness = 0, damping = 0, armature = 0, friction = 0, effort_limit = torch.inf, velocity_limit = torch.inf):
+        super().__init__(cfg, joint_names, joint_ids, num_envs, device, stiffness, damping, armature, friction, effort_limit, velocity_limit)
+        
+        if self.cfg.apply_humanoid_jacobian:
+            self.J = torch.eye(len(joint_names), device=device)  # Placeholder for Jacobian matrix
+            self.J[8, 6] = 1  # Right knee and ankle joint coupling
+            self.J[9, 7] = 1  # Left knee and ankle joint coupling
+            self.J_inv_T = torch.inverse(self.J.T)  # Inverse of the transpose of Jacobian
+
+            self.stiffness_coupled = torch.diagonal(self.J_inv_T @ torch.diag_embed(self.stiffness, dim1=-2, dim2=-1) @ self.J_inv_T.T, dim1=-2, dim2=-1)
+            self.damping_coupled = torch.diagonal(self.J_inv_T @ torch.diag_embed(self.damping, dim1=-2, dim2=-1) @ self.J_inv_T.T, dim1=-2, dim2=-1)
+
     def reset(self, env_ids: Sequence[int]):
         pass
 
@@ -134,9 +146,15 @@ class IdealPDActuator(ActuatorBase):
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
     ) -> ArticulationActions:
         if self.cfg.apply_humanoid_jacobian:
-            self.computed_effort = apply_coupling(joint_pos, joint_vel,
-                                                  control_action.joint_positions, control_action.joint_velocities,
-                                                  self.stiffness, self.damping, control_action.joint_efforts)
+            q = torch.matmul(joint_pos, self.J.T)
+            qd = torch.matmul(joint_vel, self.J.T)
+            q_des = torch.matmul(control_action.joint_positions, self.J.T)
+            qd_des = torch.matmul(control_action.joint_velocities, self.J.T)
+            tau_ff = torch.matmul(self.J_inv_T, control_action.joint_efforts.T).T
+
+            torques = self.stiffness_coupled*(q_des - q) + self.damping_coupled*(qd_des - qd) + tau_ff
+            self.computed_effort = torch.matmul(torques, self.J)
+
         else:
             # compute errors
             error_pos = control_action.joint_positions - joint_pos
