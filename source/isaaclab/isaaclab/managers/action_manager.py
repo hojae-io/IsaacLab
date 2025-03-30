@@ -193,14 +193,19 @@ class ActionManager(ManagerBase):
         # call the base class constructor (this prepares the terms)
         super().__init__(cfg, env)
         # create buffers to store actions
-        self._action = torch.zeros((self.num_envs, self.total_action_dim), device=self.device)
-        self._prev_action = torch.zeros_like(self._action)
-        self._prev_prev_action = torch.zeros_like(self._action)
+        self._action = dict()
+        self._prev_action = dict()
+        self._prev_prev_action = dict()
 
         # check if any term has debug visualization implemented
         self.cfg.debug_vis = False
-        for term in self._terms.values():
+        for name, term in self._terms.items():
             self.cfg.debug_vis |= term.cfg.debug_vis
+
+            # Initialize the action buffers
+            self._action[name] = torch.zeros((self.num_envs, term.action_dim), device=self.device)
+            self._prev_action[name] = torch.zeros_like(self._action[name])
+            self._prev_prev_action[name] = torch.zeros_like(self._action[name])
 
     def __str__(self) -> str:
         """Returns: A string representation for action manager."""
@@ -242,18 +247,18 @@ class ActionManager(ManagerBase):
         return [term.action_dim for term in self._terms.values()]
 
     @property
-    def action(self) -> torch.Tensor:
-        """The actions sent to the environment. Shape is (num_envs, total_action_dim)."""
+    def action(self) -> dict[str, torch.Tensor]:
+        """The actions sent to the environment. Shape is {name: (num_envs, action_dim)}."""
         return self._action
 
     @property
-    def prev_action(self) -> torch.Tensor:
-        """The previous actions sent to the environment. Shape is (num_envs, total_action_dim)."""
+    def prev_action(self) -> dict[str, torch.Tensor]:
+        """The previous actions sent to the environment. Shape is {name: (num_envs, action_dim)}."""
         return self._prev_action
     
     @property
-    def prev_prev_action(self) -> torch.Tensor:
-        """The second previous actions sent to the environment. Shape is (num_envs, total_action_dim)."""
+    def prev_prev_action(self) -> dict[str, torch.Tensor]:
+        """The second previous actions sent to the environment. Shape is {name: (num_envs, action_dim)}."""
         return self._prev_prev_action
 
     @property
@@ -281,11 +286,9 @@ class ActionManager(ManagerBase):
             The active terms.
         """
         terms = []
-        idx = 0
         for name, term in self._terms.items():
-            term_actions = self._action[env_idx, idx : idx + term.action_dim].cpu()
+            term_actions = self._action[name][env_idx].cpu()
             terms.append((name, term_actions.tolist()))
-            idx += term.action_dim
         return terms
 
     def set_debug_vis(self, debug_vis: bool):
@@ -312,13 +315,12 @@ class ActionManager(ManagerBase):
         # resolve environment ids
         if env_ids is None:
             env_ids = slice(None)
-        # reset the action history
-        self._prev_prev_action[env_ids] = 0.0
-        self._prev_action[env_ids] = 0.0
-        self._action[env_ids] = 0.0
-        # reset all action terms
-        for term in self._terms.values():
+        # reset all action terms and action history
+        for name, term in self._terms.items():
             term.reset(env_ids=env_ids)
+            self._prev_prev_action[name][env_ids] = 0.0
+            self._prev_action[name][env_ids] = 0.0
+            self._action[name][env_ids] = 0.0
         # nothing to log here
         return {}
 
@@ -334,17 +336,18 @@ class ActionManager(ManagerBase):
         # check if action dimension is valid
         if self.total_action_dim != action.shape[1]:
             raise ValueError(f"Invalid action shape, expected: {self.total_action_dim}, received: {action.shape[1]}.")
-        # store the input actions
-        self._prev_prev_action[:] = self._prev_action
-        self._prev_action[:] = self._action
-        self._action[:] = action.to(self.device)
 
         # split the actions and apply to each tensor
         idx = 0
-        for term in self._terms.values():
+        for name, term in self._terms.items():
             term_actions = action[:, idx : idx + term.action_dim]
             term.process_actions(term_actions)
             idx += term.action_dim
+
+            # store the input actions
+            self._prev_prev_action[name][:] = self._prev_action[name]
+            self._prev_action[name][:] = self._action[name]
+            self._action[name][:] = term_actions
 
     def apply_action(self) -> None:
         """Applies the actions to the environment/simulation.
