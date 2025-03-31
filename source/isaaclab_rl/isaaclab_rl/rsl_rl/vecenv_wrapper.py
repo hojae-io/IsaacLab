@@ -193,3 +193,87 @@ class RslRlVecEnvWrapper(VecEnv):
 
     def close(self):  # noqa: D102
         return self.env.close()
+
+
+class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
+    """ 
+    This class is the modular version of the :class:`RslRlVecEnvWrapper` and is used for modular environments in RSL-RL.
+    For MIT humanoid, it has separate actor-critic networks for the legs and arms.
+
+    obs:    leg_actor, leg_critic, arm_actor, arm_critic
+    action: leg_joint_pos, arm_joint_pos
+    reward: leg_reward, arm_reward
+
+    """
+
+    def __init__(self, env: ManagerBasedRLEnv | DirectRLEnv):
+        """Initializes the wrapper.
+
+        Note:
+            The wrapper calls :meth:`reset` at the start since the RSL-RL runner does not call reset.
+
+        Args:
+            env: The environment to wrap around.
+
+        Raises:
+            ValueError: When the environment is not an instance of :class:`ManagerBasedRLEnv` or :class:`DirectRLEnv`.
+        """
+        # check that input is valid
+        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(env.unwrapped, DirectRLEnv):
+            raise ValueError(
+                "The environment must be inherited from ManagerBasedRLEnv or DirectRLEnv. Environment type:"
+                f" {type(env)}"
+            )
+        # initialize the wrapper
+        self.env = env
+        # store information required by wrapper
+        self.num_envs = self.unwrapped.num_envs
+        self.device = self.unwrapped.device
+        self.max_episode_length = self.unwrapped.max_episode_length
+
+        self.num_actions = {"leg": self.unwrapped.action_manager.get_term('leg_joint_pos').action_dim,
+                            "arm": self.unwrapped.action_manager.get_term('arm_joint_pos').action_dim}
+        
+        self.num_actor_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_actor"][0],
+                              "arm": self.unwrapped.observation_manager.group_obs_dim["arm_actor"][0]}
+        
+        self.num_critic_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_critic"][0],
+                               "arm": self.unwrapped.observation_manager.group_obs_dim["arm_critic"][0]}
+
+        # reset at the start since the RSL-RL runner does not call reset
+        self.env.reset()
+
+    """
+    Properties
+    """
+
+    def get_observations(self) -> dict:
+        """Returns the current observations of the environment."""
+        if hasattr(self.unwrapped, "observation_manager"):
+            obs_dict = self.unwrapped.observation_manager.compute()
+        else:
+            obs_dict = self.unwrapped._get_observations()
+        return obs_dict
+
+    """
+    Operations - MDP
+    """
+
+    def reset(self) -> dict:  # noqa: D102
+        # reset the environment
+        obs_dict, _ = self.env.reset()
+        # return observations
+        return obs_dict
+
+    def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+        # record step information
+        obs_dict, rew, terminated, time_outs, extras = self.env.step(actions)
+        # compute dones for compatibility with RSL-RL
+        dones = (terminated | time_outs).to(dtype=torch.long)
+        # move time out information to the extras dict
+        # this is only needed for infinite horizon tasks
+        if not self.unwrapped.cfg.is_finite_horizon:
+            extras["time_outs"] = time_outs
+
+        # return the step information
+        return obs_dict, rew, dones, extras

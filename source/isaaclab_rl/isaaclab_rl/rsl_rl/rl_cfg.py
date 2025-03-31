@@ -80,7 +80,7 @@ class RslRlPpoAlgorithmCfg:
 
 
 @configclass
-class RslRlOnPolicyRunnerCfg:
+class RslRlBaseRunnerCfg:
     """Configuration of the runner for on-policy algorithms."""
 
     seed: int = 42
@@ -97,12 +97,6 @@ class RslRlOnPolicyRunnerCfg:
 
     empirical_normalization: bool = MISSING
     """Whether to use empirical normalization."""
-
-    policy: RslRlPpoActorCriticCfg = MISSING
-    """The policy configuration."""
-
-    algorithm: RslRlPpoAlgorithmCfg = MISSING
-    """The algorithm configuration."""
 
     ##
     # Checkpointing parameters
@@ -153,3 +147,31 @@ class RslRlOnPolicyRunnerCfg:
 
     If regex expression, the latest (alphabetical order) matching file will be loaded.
     """
+
+
+@configclass
+class RslRlOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
+    """Configuration of the runner for on-policy algorithms."""
+
+    policy: RslRlPpoActorCriticCfg = MISSING
+    """The policy configuration."""
+
+    algorithm: RslRlPpoAlgorithmCfg = MISSING
+    """The algorithm configuration."""
+
+
+@configclass
+class RslRlModularOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
+    """Configuration of the runner for modular on-policy algorithms."""
+
+    leg_policy: RslRlPpoActorCriticCfg = MISSING
+    """The leg policy configuration."""
+
+    arm_policy: RslRlPpoActorCriticCfg = MISSING
+    """The arm policy configuration."""
+
+    leg_algorithm: RslRlPpoAlgorithmCfg = MISSING
+    """The leg algorithm configuration."""
+
+    arm_algorithm: RslRlPpoAlgorithmCfg = MISSING
+    """The arm algorithm configuration."""
