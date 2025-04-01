@@ -53,37 +53,41 @@ class TerminationManager(ManagerBase):
             cfg: The configuration object or dictionary (``dict[str, TerminationTermCfg]``).
             env: An environment object.
         """
-        # create buffers to parse and store terms
-        self._term_names: list[str] = list()
-        self._term_cfgs: list[TerminationTermCfg] = list()
-        self._class_term_cfgs: list[TerminationTermCfg] = list()
-
         # call the base class constructor (this will parse the terms config)
         super().__init__(cfg, env)
-        # prepare extra info to store individual termination term information
-        self._term_dones = dict()
-        for term_name in self._term_names:
-            self._term_dones[term_name] = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         # create buffer for managing termination per environment
+        self._reset_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self._time_outs_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self._terminated_buf = torch.zeros_like(self._time_outs_buf)
 
+        # prepare extra info to store individual termination term information
+        self._group_termination_dones = dict()
+        self._group_termination_term_dones = dict()
+        for group_name in self._group_termination_term_names:
+            self._group_termination_dones[group_name] = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+            self._group_termination_term_dones[group_name] = dict()
+            for term_name in self._group_termination_term_names[group_name]:
+                self._group_termination_term_dones[group_name][term_name] = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+
     def __str__(self) -> str:
         """Returns: A string representation for termination manager."""
-        msg = f"<TerminationManager> contains {len(self._term_names)} active terms.\n"
+        msg = f"<TerminationManager> contains {len(self._group_termination_term_names)} groups.\n"
 
-        # create table for term information
-        table = PrettyTable()
-        table.title = "Active Termination Terms"
-        table.field_names = ["Index", "Name", "Time Out"]
-        # set alignment of table columns
-        table.align["Name"] = "l"
-        # add info on each term
-        for index, (name, term_cfg) in enumerate(zip(self._term_names, self._term_cfgs)):
-            table.add_row([index, name, term_cfg.time_out])
-        # convert table to string
-        msg += table.get_string()
-        msg += "\n"
+        # add info for each group
+        for group_name in self._group_termination_term_names:
+            # create table for term information
+            table = PrettyTable()
+            table.title = f"Active Termination Terms in Group: '{group_name}'"
+            table.field_names = ["Index", "Name", "Time Out"]
+            # set alignment of table columns
+            table.align["Name"] = "l"
+            # add info on each term
+            for index, (name, term_cfg) in enumerate(zip(self._group_termination_term_names[group_name], 
+                                                         self._group_termination_term_cfgs[group_name])):
+                table.add_row([index, name, term_cfg.time_out])
+            # convert table to string
+            msg += table.get_string()
+            msg += "\n"
 
         return msg
 
@@ -93,13 +97,16 @@ class TerminationManager(ManagerBase):
 
     @property
     def active_terms(self) -> list[str]:
-        """Name of active termination terms."""
-        return self._term_names
+        """Name of active termination terms in each group.
+        
+        The keys are the group names and the values are the list of termination term names in the group.
+        """
+        return self._group_termination_term_names
 
     @property
     def dones(self) -> torch.Tensor:
         """The net termination signal. Shape is (num_envs,)."""
-        return self._time_outs_buf | self._terminated_buf
+        return self._reset_buf
 
     @property
     def time_outs(self) -> torch.Tensor:
@@ -109,16 +116,16 @@ class TerminationManager(ManagerBase):
         (that is outside the scope of a MDP). For example, the environment may be terminated if the episode has
         timed out (i.e. reached max episode length).
         """
-        return self._time_outs_buf
+        return self._group_termination_dones['time_out']
 
     @property
-    def terminated(self) -> torch.Tensor:
-        """The terminated signal (reaching a terminal state). Shape is (num_envs,).
+    def terminated(self) -> dict[str, torch.Tensor]:
+        """The terminated signal (reaching a terminal state). Shape is {term_name: (num_envs,)}.
 
         This signal is set to true if the environment has reached a terminal state defined by the environment.
         This state may correspond to task success, task failure, robot falling, etc.
         """
-        return self._terminated_buf
+        return self._group_termination_dones
 
     """
     Operations.
@@ -139,17 +146,36 @@ class TerminationManager(ManagerBase):
             env_ids = slice(None)
         # add to episode dict
         extras = {}
-        for key in self._term_dones.keys():
-            # store information
-            extras["Episode Termination/" + key] = torch.count_nonzero(self._term_dones[key][env_ids]).item()
-        # reset all the reward terms
-        for term_cfg in self._class_term_cfgs:
-            term_cfg.func.reset(env_ids=env_ids)
+        for group_name in self._group_termination_term_names:
+            for term_name in self._group_termination_term_names[group_name]:
+                extras[f"Episode Termination/{group_name}/{term_name}"] = torch.count_nonzero(self._group_termination_term_dones[group_name][term_name][env_ids]).item()
+            # reset all the termination terms
+            for term_cfg in self._group_termination_class_term_cfgs[group_name]:
+                term_cfg.func.reset(env_ids=env_ids)
+
         # return logged information
         return extras
 
-    def compute(self) -> torch.Tensor:
-        """Computes the termination signal as union of individual terms.
+    def compute(self) -> dict[str, torch.Tensor]:
+        """Compute the terminations per group for all groups.
+
+        The method computes the terminations for all the groups handled by the termination manager.
+        Please check the :meth:`compute_group` on the processing of terminations per group.
+
+        Returns:
+            A dictionary with keys as the group names and values as the computed terminations.
+        """
+        # create a buffer for storing terminations from all the groups
+        self._reset_buf[:] = False
+        # iterate over all the terms in each group
+        for group_name in self._group_termination_term_names:
+            self._group_termination_dones[group_name] = self.compute_group(group_name)
+            self._reset_buf |= self._group_termination_dones[group_name]
+        # return the computed terminations
+        return self._reset_buf
+
+    def compute_group(self, group_name: str) -> torch.Tensor:
+        """Compute the terminations for the specified group.
 
         This function calls each termination term managed by the class and performs a logical OR operation
         to compute the net termination signal.
@@ -161,7 +187,8 @@ class TerminationManager(ManagerBase):
         self._time_outs_buf[:] = False
         self._terminated_buf[:] = False
         # iterate over all the termination terms
-        for name, term_cfg in zip(self._term_names, self._term_cfgs):
+        for term_name, term_cfg in zip(self._group_termination_term_names[group_name], 
+                                       self._group_termination_term_cfgs[group_name]):
             value = term_cfg.func(self._env, **term_cfg.params)
             # store timeout signal separately
             if term_cfg.time_out:
@@ -169,20 +196,21 @@ class TerminationManager(ManagerBase):
             else:
                 self._terminated_buf |= value
             # add to episode dones
-            self._term_dones[name][:] = value
+            self._group_termination_term_dones[group_name][term_name][:] = value
         # return combined termination signal
         return self._time_outs_buf | self._terminated_buf
 
-    def get_term(self, name: str) -> torch.Tensor:
+    def get_term(self, group_name: str, term_name: str) -> torch.Tensor:
         """Returns the termination term with the specified name.
 
         Args:
-            name: The name of the termination term.
+            group_name: The name of the termination group.
+            term_name: The name of the termination term.
 
         Returns:
             The corresponding termination term value. Shape is (num_envs,).
         """
-        return self._term_dones[name]
+        return self._group_termination_term_dones[group_name][term_name]
 
     def get_active_iterable_terms(self, env_idx: int) -> Sequence[tuple[str, Sequence[float]]]:
         """Returns the active terms as iterable sequence of tuples.
@@ -196,33 +224,39 @@ class TerminationManager(ManagerBase):
             The active terms.
         """
         terms = []
-        for key in self._term_dones.keys():
-            terms.append((key, [self._term_dones[key][env_idx].float().cpu().item()]))
+        for group_name in self._group_termination_term_names:
+            for term_name in self._group_termination_term_names[group_name]:
+                terms.append((term_name, [self._group_termination_term_dones[group_name][term_name][env_idx].float().cpu().item()]))
+
         return terms
 
     """
     Operations - Term settings.
     """
 
-    def set_term_cfg(self, term_name: str, cfg: TerminationTermCfg):
+    def set_term_cfg(self, group_name: str, term_name: str, cfg: TerminationTermCfg):
         """Sets the configuration of the specified term into the manager.
 
         Args:
+            group_name: The name of the termination group.
             term_name: The name of the termination term.
             cfg: The configuration for the termination term.
 
         Raises:
             ValueError: If the term name is not found.
         """
-        if term_name not in self._term_names:
+        if group_name not in self._group_termination_term_names:
+            raise ValueError(f"Group '{group_name}' not found.")
+        if term_name not in self._group_termination_term_names[group_name]:
             raise ValueError(f"Termination term '{term_name}' not found.")
         # set the configuration
-        self._term_cfgs[self._term_names.index(term_name)] = cfg
+        self._group_termination_term_cfgs[group_name][self._group_termination_term_names[group_name].index(term_name)] = cfg
 
-    def get_term_cfg(self, term_name: str) -> TerminationTermCfg:
+    def get_term_cfg(self, group_name: str, term_name: str) -> TerminationTermCfg:
         """Gets the configuration for the specified term.
 
         Args:
+            group_name: The name of the termination group.
             term_name: The name of the termination term.
 
         Returns:
@@ -231,37 +265,62 @@ class TerminationManager(ManagerBase):
         Raises:
             ValueError: If the term name is not found.
         """
-        if term_name not in self._term_names:
+        if group_name not in self._group_termination_term_names:
+            raise ValueError(f"Group '{group_name}' not found.")
+        if term_name not in self._group_termination_term_names[group_name]:
             raise ValueError(f"Termination term '{term_name}' not found.")
         # return the configuration
-        return self._term_cfgs[self._term_names.index(term_name)]
+        return self._group_termination_term_cfgs[group_name][self._group_termination_term_names[group_name].index(term_name)]
 
     """
     Helper functions.
     """
 
     def _prepare_terms(self):
+        """Prepares a list of termination terms functions."""
+        # create buffers to store information for each termination group
+        self._group_termination_term_names: dict[str, list[str]] = dict()
+        self._group_termination_term_cfgs: dict[str, list[TerminationTermCfg]] = dict()
+        self._group_termination_class_term_cfgs: dict[str, list[TerminationTermCfg]] = dict()
+
         # check if config is dict already
         if isinstance(self.cfg, dict):
             cfg_items = self.cfg.items()
         else:
             cfg_items = self.cfg.__dict__.items()
-        # iterate over all the terms
-        for term_name, term_cfg in cfg_items:
+
+        # iterate over all the groups
+        for group_name, group_cfg in cfg_items:
             # check for non config
-            if term_cfg is None:
+            if group_cfg is None:
                 continue
-            # check for valid config type
-            if not isinstance(term_cfg, TerminationTermCfg):
-                raise TypeError(
-                    f"Configuration for the term '{term_name}' is not of type TerminationTermCfg."
-                    f" Received: '{type(term_cfg)}'."
-                )
-            # resolve common parameters
-            self._resolve_common_term_cfg(term_name, term_cfg, min_argc=1)
-            # add function to list
-            self._term_names.append(term_name)
-            self._term_cfgs.append(term_cfg)
-            # check if the term is a class
-            if isinstance(term_cfg.func, ManagerTermBase):
-                self._class_term_cfgs.append(term_cfg)
+            # initialize list for the group settings
+            self._group_termination_term_names[group_name] = list()
+            self._group_termination_term_cfgs[group_name] = list()
+            self._group_termination_class_term_cfgs[group_name] = list()
+
+            # check if config is dict already
+            if isinstance(group_cfg, dict):
+                group_cfg_items = group_cfg.items()
+            else:
+                group_cfg_items = group_cfg.__dict__.items()
+
+            # iterate over all the terms
+            for term_name, term_cfg in group_cfg_items:
+                # check for non config
+                if term_cfg is None:
+                    continue
+                # check for valid config type
+                if not isinstance(term_cfg, TerminationTermCfg):
+                    raise TypeError(
+                        f"Configuration for the term '{term_name}' is not of type TerminationTermCfg."
+                        f" Received: '{type(term_cfg)}'."
+                    )
+                # resolve common parameters
+                self._resolve_common_term_cfg(term_name, term_cfg, min_argc=1)
+                # add function to list
+                self._group_termination_term_names[group_name].append(term_name)
+                self._group_termination_term_cfgs[group_name].append(term_cfg)
+                # check if the term is a class
+                if isinstance(term_cfg.func, ManagerTermBase):
+                    self._group_termination_class_term_cfgs[group_name].append(term_cfg)

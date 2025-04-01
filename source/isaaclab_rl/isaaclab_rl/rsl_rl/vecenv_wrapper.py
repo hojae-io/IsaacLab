@@ -180,16 +180,11 @@ class RslRlVecEnvWrapper(VecEnv):
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
-        obs_dict, rew, terminated, time_outs, extras = self.env.step(actions)
+        obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
-        dones = (terminated | time_outs).to(dtype=torch.long)
-        # move time out information to the extras dict
-        # this is only needed for infinite horizon tasks
-        if not self.unwrapped.cfg.is_finite_horizon:
-            extras["time_outs"] = time_outs
-
+        dones = dones.to(dtype=torch.long)
         # return the step information
-        return obs_dict, rew, dones, extras
+        return obs_dict, rew, dones, time_outs, extras
 
     def close(self):  # noqa: D102
         return self.env.close()
@@ -267,13 +262,8 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
-        obs_dict, rew, terminated, time_outs, extras = self.env.step(actions)
+        obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
-        dones = (terminated | time_outs).to(dtype=torch.long)
-        # move time out information to the extras dict
-        # this is only needed for infinite horizon tasks
-        if not self.unwrapped.cfg.is_finite_horizon:
-            extras["time_outs"] = time_outs
-
+        dones = dones.to(dtype=torch.long)
         # return the step information
-        return obs_dict, rew, dones, extras
+        return obs_dict, rew, dones, terminated, time_outs, extras

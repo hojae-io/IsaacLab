@@ -246,7 +246,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         self.obs_buf = self.observation_manager.compute()
 
         # return observations, rewards, resets and extras
-        return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+        return self.obs_buf, self.reward_buf, self.reset_buf, self.reset_terminated, self.reset_time_outs, self.extras
     
     def _pre_physics_step_callback(self):
         """Callback function called before each physics step."""
