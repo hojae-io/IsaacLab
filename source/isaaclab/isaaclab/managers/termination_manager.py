@@ -96,7 +96,7 @@ class TerminationManager(ManagerBase):
     """
 
     @property
-    def active_terms(self) -> list[str]:
+    def active_terms(self) -> dict[str, list[str]]:
         """Name of active termination terms in each group.
         
         The keys are the group names and the values are the list of termination term names in the group.
@@ -156,7 +156,7 @@ class TerminationManager(ManagerBase):
         # return logged information
         return extras
 
-    def compute(self) -> dict[str, torch.Tensor]:
+    def compute(self) -> torch.Tensor:
         """Compute the terminations per group for all groups.
 
         The method computes the terminations for all the groups handled by the termination manager.

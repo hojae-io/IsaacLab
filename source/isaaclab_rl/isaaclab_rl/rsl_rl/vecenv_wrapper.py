@@ -178,13 +178,15 @@ class RslRlVecEnvWrapper(VecEnv):
         # return observations
         return obs_dict["actor"], obs_dict["critic"]
 
-    def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    def step(self, actions: torch.Tensor) -> tuple[dict, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
         obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
         dones = dones.to(dtype=torch.long)
+        # assume that there is only one reward group
+        rew_group_name = list(rew)[0]
         # return the step information
-        return obs_dict, rew, dones, time_outs, extras
+        return obs_dict, rew[rew_group_name], dones, time_outs, extras
 
     def close(self):  # noqa: D102
         return self.env.close()
@@ -260,7 +262,7 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
         # return observations
         return obs_dict
 
-    def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    def step(self, actions: torch.Tensor) -> tuple[dict, dict, torch.Tensor, dict, torch.Tensor, dict]:
         # record step information
         obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
