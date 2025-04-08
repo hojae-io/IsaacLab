@@ -117,3 +117,6 @@ class ManagerBasedEnvCfg:
 
     wait_for_textures: bool = True
     """True to wait for assets to be loaded completely, False otherwise. Defaults to True."""
+
+    record: bool = False
+    """Whether to record the logging data during simulation. Defaults to False."""

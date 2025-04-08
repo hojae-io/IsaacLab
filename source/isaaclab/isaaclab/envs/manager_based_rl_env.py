@@ -22,6 +22,7 @@ from .common import VecEnvStepReturn
 from .manager_based_env import ManagerBasedEnv
 from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
 
+from isaaclab.managers import VideoRecorder
 
 class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
     """The superclass for the manager-based workflow reinforcement learning-based environments.
@@ -90,7 +91,11 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         if self.sim.has_gui():
             self._setup_keyboard_interface()
             print(self.keyboard_interface, '\n')
-        
+
+        if self.cfg.record:
+            self._setup_recorder()
+            print(self.recorder, '\n')
+
         print("[INFO]: Completed setting up the environment...")
 
     """
@@ -245,6 +250,9 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # note: done after reset to get the correct observations for reset envs
         self.obs_buf = self.observation_manager.compute()
 
+        if self.cfg.record:
+            self._record_data()
+
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_buf, self.reset_terminated, self.reset_time_outs, self.extras
     
@@ -262,6 +270,18 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
     def _setup_keyboard_interface(self):
         self.keyboard_interface = None
+
+    def _setup_recorder(self):
+        self.recorder = VideoRecorder(fps=int(1/self.step_dt))
+
+    def _record_data(self):
+        image = self.get_viewport_camera_image()
+        log_data = self._get_log_data()
+        self.recorder.log(image, log_data)
+
+    def _get_log_data(self) -> dict:
+        """Returns a dictionary of logged values. Can be overridden by subclasses."""
+        return {}
 
     def render(self, recompute: bool = False) -> np.ndarray | None:
         """Run rendering without stepping through the physics.
