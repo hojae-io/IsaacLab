@@ -100,3 +100,109 @@ class ContactSensorData:
     Note:
         If the :attr:`ContactSensorCfg.track_air_time` is False, then this quantity is None.
     """
+
+
+    # * Data container for contact_physx_view.get_contact_data(dt)
+
+    contact_forces_buffer: torch.Tensor | None = None
+    """Buffer storing detailed contact forces. 
+
+    Shape is (num_envs, max_contact_data_count_per_env, 1), where each entry is the force magnitude at a contact point.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    contact_points_buffer: torch.Tensor | None = None
+    """Buffer storing contact points in world frame. 
+
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (x, y, z) position of a contact point.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    contact_normals_buffer: torch.Tensor | None = None
+    """Buffer storing contact normals in world frame. 
+
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (x, y, z) normal vector at a contact point.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    contact_separation_distances_buffer: torch.Tensor | None = None
+    """Buffer storing separation distances at contact points.
+
+    Shape is (num_envs, max_contact_data_count_per_env, 1), where each entry is the separation distance.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    contact_count_buffer: torch.Tensor | None = None
+    """Number of active contacts per sensor-filter pair. 
+
+    Shape is (num_envs, sensor_count_per_env, filter_count), where each entry is the count of contacts.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+        """
+
+    contact_start_indices_buffer: torch.Tensor | None = None
+    """Start indices in buffers for each sensor-filter pair.
+
+    Shape is (num_envs, sensor_count_per_env, filter_count), where each entry points to the start index in data buffers. 
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+        """
+
+
+    # * Data container for contact_physx_view.get_friction_data(dt)
+
+    friction_forces_buffer: torch.Tensor | None = None
+    """Buffer storing friction forces at contact points.
+    
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (x, y, z) friction force vector at a contact point.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    friction_points_buffer: torch.Tensor | None = None
+    """Buffer storing friction points in world frame.
+
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (x, y, z) position of a friction point.
+
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    friction_count_buffer: torch.Tensor | None = None
+    """Number of active friction contacts per sensor-filter pair.
+
+    Shape is (num_envs, sensor_count_per_env, filter_count), where each entry is the count of friction contacts.
+    
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    friction_start_indices_buffer: torch.Tensor | None = None
+    """Start indices in buffers for each sensor-filter pair.
+
+    Shape is (num_envs, sensor_count_per_env, filter_count), where each entry points to the start index in data buffers.
+    
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """

@@ -147,6 +147,18 @@ class ContactSensor(SensorBase):
         # reset force matrix
         if len(self.cfg.filter_prim_paths_expr) != 0:
             self._data.force_matrix_w[env_ids] = 0.0
+            if self.cfg.max_contact_data_count_per_env > 0:
+                self._data.contact_forces_buffer[env_ids] = 0.0
+                self._data.contact_points_buffer[env_ids] = 0.0
+                self._data.contact_normals_buffer[env_ids] = 0.0
+                self._data.contact_separation_distances_buffer[env_ids] = 0.0
+                self._data.contact_count_buffer[env_ids] = 0
+                self._data.contact_start_indices_buffer[env_ids] = 0
+
+                self._data.friction_forces_buffer[env_ids] = 0.0
+                self._data.friction_points_buffer[env_ids] = 0.0
+                self._data.friction_count_buffer[env_ids] = 0
+                self._data.friction_start_indices_buffer[env_ids] = 0
         # reset the current air time
         if self.cfg.track_air_time:
             self._data.current_air_time[env_ids] = 0.0
@@ -272,7 +284,8 @@ class ContactSensor(SensorBase):
         # create a rigid prim view for the sensor
         self._body_physx_view = self._physics_sim_view.create_rigid_body_view(body_names_glob)
         self._contact_physx_view = self._physics_sim_view.create_rigid_contact_view(
-            body_names_glob, filter_patterns=filter_prim_paths_glob
+            body_names_glob, filter_patterns=filter_prim_paths_glob,
+            max_contact_data_count=self.cfg.max_contact_data_count_per_env * self._num_envs,
         )
         # resolve the true count of bodies
         self._num_bodies = self.body_physx_view.count // self._num_envs
@@ -311,6 +324,20 @@ class ContactSensor(SensorBase):
                 self._num_envs, self._num_bodies, num_filters, 3, device=self._device
             )
 
+            if self.cfg.max_contact_data_count_per_env > 0:
+                # * Assume 1 sensor (foot) / 1 filter (ground) per environment
+                self._data.contact_forces_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 1, device=self._device)
+                self._data.contact_points_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.contact_normals_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.contact_separation_distances_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 1, device=self._device)
+                self._data.contact_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+                self._data.contact_start_indices_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+
+                self._data.friction_forces_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.friction_points_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.friction_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+                self._data.friction_start_indices_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+
     def _update_buffers_impl(self, env_ids: Sequence[int]):
         """Fills the buffers of the sensor data."""
         # default to all sensors
@@ -335,6 +362,69 @@ class ContactSensor(SensorBase):
             force_matrix_w = self.contact_physx_view.get_contact_force_matrix(dt=self._sim_physics_dt)
             force_matrix_w = force_matrix_w.view(-1, self._num_bodies, num_filters, 3)
             self._data.force_matrix_w[env_ids] = force_matrix_w[env_ids]
+            if self.cfg.max_contact_data_count_per_env > 0:
+                (   contact_forces, 
+                    contact_points, 
+                    contact_normals, 
+                    contact_separation_distances, 
+                    contact_count,
+                    contact_start_indices, 
+                ) = self.contact_physx_view.get_contact_data(dt=self._sim_physics_dt)
+
+                rel_idx = torch.arange(self.cfg.max_contact_data_count_per_env, device=self.device).unsqueeze(0)  # Shape: (1, max_contacts)
+                contact_mask = rel_idx < contact_count[env_ids] # Shape: (len(env_ids), max_contacts)
+                contact_full_idx = contact_start_indices[env_ids] + rel_idx  # Shape: (len(env_ids), max_contacts)
+                
+                contact_forces_buffer = self._data.contact_forces_buffer[env_ids]
+                contact_points_buffer = self._data.contact_points_buffer[env_ids]
+                contact_normals_buffer = self._data.contact_normals_buffer[env_ids]
+                contact_separation_distances_buffer = self._data.contact_separation_distances_buffer[env_ids]
+                contact_count_buffer = self._data.contact_count_buffer[env_ids]
+                contact_start_indices_buffer = self._data.contact_start_indices_buffer[env_ids]
+
+                contact_forces_buffer[contact_mask] = contact_forces[contact_full_idx[contact_mask]]
+                contact_forces_buffer[~contact_mask] = 0.0
+                contact_points_buffer[contact_mask] = contact_points[contact_full_idx[contact_mask]]
+                contact_points_buffer[~contact_mask] = 0.0
+                contact_normals_buffer[contact_mask] = contact_normals[contact_full_idx[contact_mask]]
+                contact_normals_buffer[~contact_mask] = 0.0
+                contact_separation_distances_buffer[contact_mask] = contact_separation_distances[contact_full_idx[contact_mask]]
+                contact_separation_distances_buffer[~contact_mask] = 0.0
+                contact_count_buffer = contact_count[env_ids].squeeze(1)
+                contact_start_indices_buffer = contact_start_indices[env_ids].squeeze(1)
+
+                self._data.contact_forces_buffer[env_ids] = contact_forces_buffer
+                self._data.contact_points_buffer[env_ids] = contact_points_buffer
+                self._data.contact_normals_buffer[env_ids] = contact_normals_buffer
+                self._data.contact_separation_distances_buffer[env_ids] = contact_separation_distances_buffer
+                self._data.contact_count_buffer[env_ids] = contact_count_buffer
+                self._data.contact_start_indices_buffer[env_ids] = contact_start_indices_buffer
+
+                (   friction_forces,
+                    friction_points,
+                    friction_count,
+                    friction_start_indices,
+                ) = self.contact_physx_view.get_friction_data(dt=self._sim_physics_dt)
+                
+                friction_mask = rel_idx < friction_count[env_ids] # Shape: (len(env_ids), max_contacts)
+                friction_full_idx = friction_start_indices[env_ids] + rel_idx  # Shape: (len(env_ids), max_contacts)
+
+                friction_forces_buffer = self._data.friction_forces_buffer[env_ids]
+                friction_points_buffer = self._data.friction_points_buffer[env_ids]
+                friction_count_buffer = self._data.friction_count_buffer[env_ids]
+                friction_start_indices_buffer = self._data.friction_start_indices_buffer[env_ids]
+
+                friction_forces_buffer[friction_mask] = friction_forces[friction_full_idx[friction_mask]]
+                friction_forces_buffer[~friction_mask] = 0.0
+                friction_points_buffer[friction_mask] = friction_points[friction_full_idx[friction_mask]]
+                friction_points_buffer[~friction_mask] = 0.0
+                friction_count_buffer = friction_count[env_ids].squeeze(1)
+                friction_start_indices_buffer = friction_start_indices[env_ids].squeeze(1)
+
+                self._data.friction_forces_buffer[env_ids] = friction_forces_buffer
+                self._data.friction_points_buffer[env_ids] = friction_points_buffer
+                self._data.friction_count_buffer[env_ids] = friction_count_buffer
+                self._data.friction_start_indices_buffer[env_ids] = friction_start_indices_buffer
 
         # obtain the pose of the sensor origin
         if self.cfg.track_pose:
