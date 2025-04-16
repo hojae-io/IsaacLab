@@ -206,3 +206,33 @@ class ContactSensorData:
         If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
         If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
     """
+
+
+    # * Data container for Ground Reaction Force
+
+    GRF_forces_buffer: torch.Tensor | None = None
+    """Buffer storing ground reaction forces.
+
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (f_x, f_y, f_z) component of the ground reaction force vector.
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    GRF_points_buffer: torch.Tensor | None = None
+    """Buffer storing ground reaction force points.
+
+    Shape is (num_envs, max_contact_data_count_per_env, 3), where each entry is the (x, y, z) position of a ground reaction force point.
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """
+
+    GRF_count_buffer: torch.Tensor | None = None
+    """Number of active ground reaction forces per sensor-filter pair.
+
+    Shape is (num_envs, sensor_count_per_env, filter_count), where each entry is the count of ground reaction forces.
+    Note:
+        If the :attr:`ContactSensorCfg.filter_prim_paths_expr` is empty, then this quantity is None.
+        If the :attr: `ContactSensorCfg.max_contact_data_count` is 0, then this quantity is None.
+    """

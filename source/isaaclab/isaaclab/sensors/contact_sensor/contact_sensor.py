@@ -17,6 +17,7 @@ from pxr import PhysxSchema
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.string as string_utils
+import isaaclab.utils.math as math_utils
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.utils.math import convert_quat
 
@@ -159,6 +160,10 @@ class ContactSensor(SensorBase):
                 self._data.friction_points_buffer[env_ids] = 0.0
                 self._data.friction_count_buffer[env_ids] = 0
                 self._data.friction_start_indices_buffer[env_ids] = 0
+
+                self._data.GRF_forces_buffer[env_ids] = 0.0
+                self._data.GRF_points_buffer[env_ids] = 0.0
+                self._data.GRF_count_buffer[env_ids] = 0
         # reset the current air time
         if self.cfg.track_air_time:
             self._data.current_air_time[env_ids] = 0.0
@@ -338,6 +343,10 @@ class ContactSensor(SensorBase):
                 self._data.friction_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
                 self._data.friction_start_indices_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
 
+                self._data.GRF_forces_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.GRF_points_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.GRF_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+
     def _update_buffers_impl(self, env_ids: Sequence[int]):
         """Fills the buffers of the sensor data."""
         # default to all sensors
@@ -426,6 +435,28 @@ class ContactSensor(SensorBase):
                 self._data.friction_count_buffer[env_ids] = friction_count_buffer
                 self._data.friction_start_indices_buffer[env_ids] = friction_start_indices_buffer
 
+                # Post-processing for Ground Reaction Forces (GRF) = Concatenation of friction (f_x, f_y) and contact (f_z) forces
+
+                GRF_forces_buffer = self._data.GRF_forces_buffer[env_ids]
+                GRF_points_buffer = self._data.GRF_points_buffer[env_ids]
+                GRF_count_buffer = self._data.GRF_count_buffer[env_ids]
+
+                tol = 1e-2
+                diff = friction_points_buffer.unsqueeze(2) - contact_points_buffer.unsqueeze(1)
+                distances = diff.norm(dim=-1)
+                mask = distances < tol
+                contact_force_z_sum = (contact_forces_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2)  # shape: (N, F, 1)
+
+                GRF_forces_buffer = friction_forces_buffer.clone()
+                GRF_forces_buffer[..., 2:3] = contact_force_z_sum
+
+                GRF_points_buffer = friction_points_buffer.clone()
+                GRF_count_buffer = friction_count_buffer.clone()
+
+                self._data.GRF_forces_buffer[env_ids] = GRF_forces_buffer
+                self._data.GRF_points_buffer[env_ids] = GRF_points_buffer
+                self._data.GRF_count_buffer[env_ids] = GRF_count_buffer
+
         # obtain the pose of the sensor origin
         if self.cfg.track_pose:
             pose = self.body_physx_view.get_transforms().view(-1, self._num_bodies, 7)[env_ids]
@@ -480,18 +511,43 @@ class ContactSensor(SensorBase):
         # note: this invalidity happens because of isaac sim view callbacks
         if self.body_physx_view is None:
             return
-        # marker indices
-        # 0: contact, 1: no contact
-        net_contact_force_w = torch.norm(self._data.net_forces_w, dim=-1)
-        marker_indices = torch.where(net_contact_force_w > self.cfg.force_threshold, 0, 1)
-        # check if prim is visualized
-        if self.cfg.track_pose:
-            frame_origins: torch.Tensor = self._data.pos_w
-        else:
-            pose = self.body_physx_view.get_transforms()
-            frame_origins = pose.view(-1, self._num_bodies, 7)[:, :, :3]
-        # visualize
-        self.contact_visualizer.visualize(frame_origins.view(-1, 3), marker_indices=marker_indices.view(-1))
+        if self.cfg.max_contact_data_count_per_env == 0:
+            # marker indices
+            # 0: contact, 1: no contact
+            net_contact_force_w = torch.norm(self._data.net_forces_w, dim=-1)
+            marker_indices = torch.where(net_contact_force_w > self.cfg.force_threshold, 0, 1)
+            # check if prim is visualized
+            if self.cfg.track_pose:
+                frame_origins: torch.Tensor = self._data.pos_w
+            else:
+                pose = self.body_physx_view.get_transforms()
+                frame_origins = pose.view(-1, self._num_bodies, 7)[:, :, :3]
+            # visualize
+            self.contact_visualizer.visualize(frame_origins.view(-1, 3), marker_indices=marker_indices.view(-1))
+        else:   
+            """ Detailed contact data is available
+                Origin of the arrow is the contact points
+                Direction of the arrow is the (friction_forces_x, friction_forces_y, contact forces)
+            """
+            rel_idx = torch.arange(self.cfg.max_contact_data_count_per_env, device=self.device).unsqueeze(0)  # Shape: (1, max_contacts)
+            mask = rel_idx < self._data.GRF_count_buffer.unsqueeze(1)  # Shape: (N, K)
+
+            GRF_norm_vector = torch.nn.functional.normalize(self._data.GRF_forces_buffer[mask])
+            base_vector = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(GRF_norm_vector.shape[0], 1)
+            axis = torch.cross(base_vector, GRF_norm_vector, dim=1)
+            angle = torch.acos(torch.clamp(torch.sum(base_vector * GRF_norm_vector, dim=1), -1.0, 1.0))
+            GRF_arrow_quat = math_utils.quat_from_angle_axis(angle, axis)
+
+            default_scale = self.contact_visualizer.cfg.markers["arrow"].scale
+            GRF_arrow_scale = torch.tensor(default_scale, device=self.device).repeat(GRF_norm_vector.shape[0], 1)
+            GRF_arrow_scale[:, 0] = (self._data.GRF_forces_buffer[mask].norm(dim=1) * 0.05)
+
+            local_offset = 0.1 * GRF_arrow_scale[:, 0:1] * torch.tensor([0.25, 0.0, 0.0], device=self.device) # The given pos divides the arrow 3:1 = head:tail
+            transformed_offset = (math_utils.matrix_from_quat(GRF_arrow_quat) @ local_offset.unsqueeze(-1)).squeeze(-1)
+            GRF_arrow_pos_w = self._data.friction_points_buffer[mask] + transformed_offset
+
+            self.contact_visualizer.visualize(GRF_arrow_pos_w, GRF_arrow_quat, GRF_arrow_scale)
+
 
     """
     Internal simulation callbacks.
