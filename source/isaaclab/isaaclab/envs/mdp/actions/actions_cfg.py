@@ -31,7 +31,8 @@ class JointActionCfg(ActionTermCfg):
     """Offset factor for the action (float or dict of regex expressions). Defaults to 0.0."""
     preserve_order: bool = False
     """Whether to preserve the order of the joint names in the action output. Defaults to False."""
-
+    disable_action: bool = False
+    """Whether to disable the action term. Defaults to False."""
 
 @configclass
 class JointPositionActionCfg(JointActionCfg):

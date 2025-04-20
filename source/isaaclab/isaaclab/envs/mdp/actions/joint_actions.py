@@ -137,6 +137,9 @@ class JointAction(ActionTerm):
             self._processed_actions = torch.clamp(
                 self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
             )
+        if self.cfg.disable_action:
+            # disable action by setting it to zero
+            self._processed_actions[:] = 0.
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self._raw_actions[env_ids] = 0.0
