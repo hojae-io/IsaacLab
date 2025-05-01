@@ -215,6 +215,12 @@ class ArticulationData:
     joint_damping: torch.Tensor = None
     """Joint damping provided to simulation. Shape is (num_instances, num_joints)."""
 
+    joint_armature: torch.Tensor = None
+    """Joint armature provided to simulation. Shape is (num_instances, num_joints)."""
+
+    joint_friction: torch.Tensor = None
+    """Joint friction provided to simulation. Shape is (num_instances, num_joints)."""
+    
     joint_limits: torch.Tensor = None
     """Joint limits provided to simulation. Shape is (num_instances, num_joints, 2)."""
 
