@@ -78,7 +78,7 @@ def saturate(x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor) -> torch
     return torch.max(torch.min(x, upper), lower)
 
 
-@torch.jit.script
+# @torch.jit.script
 def normalize(x: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
     """Normalizes a given input tensor to unit length.
 
@@ -626,7 +626,7 @@ def quat_rotate_inverse(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     return a - b + c
 
 
-@torch.jit.script
+# @torch.jit.script
 def quat_from_angle_axis(angle: torch.Tensor, axis: torch.Tensor) -> torch.Tensor:
     """Convert rotations given as angle-axis to quaternions.
 
