@@ -138,19 +138,20 @@ def parse_env_cfg(
     return cfg
 
 
-def set_registry_to_original_files(args_cli: argparse.Namespace) -> None:
+def set_registry_to_original_files(task: str, load_run: int = None) -> None:
     """Set the gym registry to original files.
 
     This function sets the gym registry to the original files for the given task name. It is used to ensure that
     the environment configuration is loaded from the original files instead of the current version.
 
     Args:
-        args_cli: The command line arguments.
+        task: The name of the task to set the registry for.
+        load_run: The run to load the original files from. If None, the latest run is used.
     """
     # obtain the configuration entry point
-    env = gym.spec(args_cli.task).entry_point
-    env_cfg = gym.spec(args_cli.task).kwargs.get("env_cfg_entry_point")
-    rsl_rl_cfg = gym.spec(args_cli.task).kwargs.get("rsl_rl_cfg_entry_point")
+    env = gym.spec(task).entry_point
+    env_cfg = gym.spec(task).kwargs.get("env_cfg_entry_point")
+    rsl_rl_cfg = gym.spec(task).kwargs.get("rsl_rl_cfg_entry_point")
 
     # get the path to the original files
     log_path = os.path.join(ISAACLAB_BRL_ROOT_DIR, 'logs', 'rsl_rl', rsl_rl_cfg().experiment_name)
@@ -160,8 +161,8 @@ def set_registry_to_original_files(args_cli: argparse.Namespace) -> None:
     # sort matched runs by alphabetical order (latest run should be last)
     runs.sort()
 
-    if args_cli.load_run is not None:
-        run_path = os.path.join(log_path, args_cli.load_run)
+    if load_run is not None:
+        run_path = os.path.join(log_path, load_run)
     else:
         run_path = os.path.join(log_path, runs[-1])
 
@@ -183,9 +184,9 @@ def set_registry_to_original_files(args_cli: argparse.Namespace) -> None:
     rsl_rl_cfg_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rsl_rl_cfg_module)
 
-    gym.spec(args_cli.task).entry_point = getattr(env_module, env.__name__)
-    gym.spec(args_cli.task).kwargs.update({"env_cfg_entry_point": getattr(env_cfg_module, env_cfg.__name__), 
-                                           "rsl_rl_cfg_entry_point": getattr(rsl_rl_cfg_module, rsl_rl_cfg.__name__)})
+    gym.spec(task).entry_point = getattr(env_module, env.__name__)
+    gym.spec(task).kwargs.update({"env_cfg_entry_point": getattr(env_cfg_module, env_cfg.__name__), 
+                                  "rsl_rl_cfg_entry_point": getattr(rsl_rl_cfg_module, rsl_rl_cfg.__name__)})
     
 
 def get_checkpoint_path(
