@@ -143,13 +143,13 @@ class RslRlVecEnvWrapper(VecEnv):
     Properties
     """
 
-    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_observations(self) -> dict[str, torch.Tensor]:
         """Returns the current observations of the environment."""
         if hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
         else:
             obs_dict = self.unwrapped._get_observations()
-        return obs_dict["actor"], obs_dict["critic"]
+        return obs_dict
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -239,18 +239,6 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
 
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
-
-    """
-    Properties
-    """
-
-    def get_observations(self) -> dict:
-        """Returns the current observations of the environment."""
-        if hasattr(self.unwrapped, "observation_manager"):
-            obs_dict = self.unwrapped.observation_manager.compute()
-        else:
-            obs_dict = self.unwrapped._get_observations()
-        return obs_dict
 
     """
     Operations - MDP
