@@ -172,11 +172,11 @@ class RslRlVecEnvWrapper(VecEnv):
     def seed(self, seed: int = -1) -> int:  # noqa: D102
         return self.unwrapped.seed(seed)
 
-    def reset(self) -> tuple[torch.Tensor, torch.Tensor]:  # noqa: D102
+    def reset(self) -> dict:  # noqa: D102
         # reset the environment
         obs_dict, _ = self.env.reset()
         # return observations
-        return obs_dict["actor"], obs_dict["critic"]
+        return obs_dict
 
     def step(self, actions: torch.Tensor) -> tuple[dict, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
@@ -243,12 +243,6 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
     """
     Operations - MDP
     """
-
-    def reset(self) -> dict:  # noqa: D102
-        # reset the environment
-        obs_dict, _ = self.env.reset()
-        # return observations
-        return obs_dict
 
     def step(self, actions: torch.Tensor) -> tuple[dict, dict, torch.Tensor, dict, torch.Tensor, dict]:
         # record step information
