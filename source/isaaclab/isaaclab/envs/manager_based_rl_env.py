@@ -275,7 +275,10 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         self.recorder = VideoRecorder(fps=int(1/self.step_dt))
 
     def _record_data(self):
-        image = self.get_viewport_camera_image()
+        if self.sim.has_gui():
+            image = self.get_viewport_camera_image()
+        else:
+            image = None
         log_data = self._get_log_data()
         self.recorder.log(image, log_data)
 

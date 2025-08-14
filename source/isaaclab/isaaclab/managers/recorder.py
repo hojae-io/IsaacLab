@@ -41,9 +41,10 @@ class VideoRecorder(RecorderBase):
         msg += f" (fps: {self.fps})"
         return msg
 
-    def log(self, image: np.ndarray, *args):
+    def log(self, image: np.ndarray | None, *args):
         # * Log images
-        self.frames.append(image)
+        if image is not None:
+            self.frames.append(image)
 
     def save(self, resume_path: str):
         self.setup_save_folder(resume_path)
@@ -58,6 +59,9 @@ class VideoRecorder(RecorderBase):
         os.makedirs(self.folderpath, exist_ok=True)
 
     def save_video(self):
+        if not self.frames:
+            return
+        
         print("Creating video...")
         filepath = os.path.join(self.folderpath, f"{self.checkpoint}.mp4")
 
