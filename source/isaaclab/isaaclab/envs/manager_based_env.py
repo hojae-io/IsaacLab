@@ -13,6 +13,7 @@ import isaacsim.core.utils.torch as torch_utils
 import omni.log
 from isaacsim.core.simulation_manager import SimulationManager
 
+from isaaclab.assets import Articulation
 from isaaclab.managers import ActionManager, EventManager, ObservationManager, RecorderManager
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
@@ -200,7 +201,7 @@ class ManagerBasedEnv:
     """
 
     def _init_buffers(self):
-        self.robot = self.scene["robot"]
+        self.robot: Articulation = self.scene["robot"]
         self.total_weight = self.robot.root_physx_view.get_masses().sum(dim=1).to(self.device) * (-self.cfg.sim.gravity[2])
 
     def load_managers(self):
