@@ -676,6 +676,52 @@ def axis_angle_from_quat(quat: torch.Tensor, eps: float = 1.0e-6) -> torch.Tenso
 
 
 @torch.jit.script
+def axis_angle_from_matrix(R: torch.Tensor) -> torch.Tensor:
+    """Convert rotation matrix to axis-angle representation."""
+    # Extract rotation angle and axis
+    trace = torch.diagonal(R, dim1=-2, dim2=-1).sum(-1)
+    cos_theta = (trace - 1) / 2
+    
+    # Clamp cos_theta to avoid numerical issues
+    cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
+    theta = torch.acos(cos_theta)
+    
+    # Handle special cases
+    sin_theta = torch.sqrt(1 - cos_theta**2 + 1e-8)
+    
+    # Extract axis components
+    axis = torch.stack([
+        R[:, 2, 1] - R[:, 1, 2],
+        R[:, 0, 2] - R[:, 2, 0], 
+        R[:, 1, 0] - R[:, 0, 1]
+    ], dim=-1)
+    
+    # Normalize axis and scale by angle
+    axis_norm = torch.norm(axis, dim=-1, keepdim=True)
+    axis_norm = torch.clamp(axis_norm, 1e-8, None)
+    
+    # Final axis-angle representation
+    axis_angle = (theta * (1 / (2 * sin_theta))).unsqueeze(-1) * axis
+    
+    return axis_angle
+
+
+@torch.jit.script
+def quat_error(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    """Computes the rotation difference between two quaternions.
+
+    Args:
+        q1: The first quaternion in (w, x, y, z). Shape is (..., 4).
+        q2: The second quaternion in (w, x, y, z). Shape is (..., 4).
+
+    Returns:
+        The rotation difference between two quaternions. Shape is (..., 3).
+    """
+    quat_diff = quat_mul(q1, quat_conjugate(q2))
+    return axis_angle_from_quat(quat_diff)
+
+
+@torch.jit.script
 def quat_error_magnitude(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
     """Computes the rotation difference between two quaternions.
 
