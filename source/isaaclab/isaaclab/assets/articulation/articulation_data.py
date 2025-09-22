@@ -873,7 +873,7 @@ class ArticulationData:
             velocity = self._root_physx_view.get_root_velocities().clone()
 
             # link_lin_acc_w = com_lin_acc_w + link_ang_acc_w x (r_o - r_c) + link_ang_vel_w x (link_ang_vel_w x (r_o - r_c))
-            r_co = math_utils.quat_rotate(pose[:, 3:7], -self.com_pos_b[:, 0, :])
+            r_co = math_utils.quat_apply(pose[:, 3:7], -self.com_pos_b[:, 0, :])
             root_link_lin_acc_w = self.root_com_acc_w[:, :3].clone() + torch.linalg.cross(
                 root_link_ang_acc_w, r_co, dim=-1) + \
                 torch.linalg.cross(
@@ -908,7 +908,7 @@ class ArticulationData:
         This quantity is the linear acceleration of the root rigid body's actor frame with respect to the
         rigid body's actor frame.
         """
-        return math_utils.quat_rotate_inverse(self.root_link_quat_w, self.root_link_lin_acc_w)
+        return math_utils.quat_apply_inverse(self.root_link_quat_w, self.root_link_lin_acc_w)
     
     @property
     def root_link_ang_acc_b(self) -> torch.Tensor:
@@ -917,7 +917,7 @@ class ArticulationData:
         This quantity is the angular acceleration of the root rigid body's actor frame with respect to the
         rigid body's actor frame.
         """
-        return math_utils.quat_rotate_inverse(self.root_link_quat_w, self.root_link_ang_acc_w)
+        return math_utils.quat_apply_inverse(self.root_link_quat_w, self.root_link_ang_acc_w)
 
     #
     # Root Center of Mass state properties
