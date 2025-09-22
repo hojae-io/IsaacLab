@@ -5,7 +5,7 @@
 
 import gymnasium as gym
 import torch
-from tensordict import TensorDict
+import numpy as np
 
 from rsl_rl.env import VecEnv
 
@@ -59,10 +59,20 @@ class RslRlVecEnvWrapper(VecEnv):
             self.num_actions = self.unwrapped.action_manager.total_action_dim
         else:
             self.num_actions = gym.spaces.flatdim(self.unwrapped.single_action_space)
-
-        # modify the action space to the clip range
-        self._modify_action_space()
-
+        if hasattr(self.unwrapped, "observation_manager"):
+            self.num_actor_obs = self.unwrapped.observation_manager.group_obs_dim["actor"][0]
+        else:
+            self.num_actor_obs = gym.spaces.flatdim(self.unwrapped.single_observation_space["actor"])
+        # -- privileged observations
+        if (
+            hasattr(self.unwrapped, "observation_manager")
+            and "critic" in self.unwrapped.observation_manager.group_obs_dim
+        ):
+            self.num_critic_obs = self.unwrapped.observation_manager.group_obs_dim["critic"][0]
+        elif hasattr(self.unwrapped, "num_states") and "critic" in self.unwrapped.single_observation_space:
+            self.num_critic_obs = gym.spaces.flatdim(self.unwrapped.single_observation_space["critic"])
+        else:
+            self.num_critic_obs = 0
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
 
@@ -110,10 +120,23 @@ class RslRlVecEnvWrapper(VecEnv):
         This will be the bare :class:`gymnasium.Env` environment, underneath all layers of wrappers.
         """
         return self.env.unwrapped
-
+    
+    @property
+    def viewport_camera_image(self) -> np.ndarray:
+        """Returns the viewport camera image."""
+        return self.unwrapped.get_viewport_camera_image()
+    
     """
     Properties
     """
+
+    def get_observations(self) -> dict[str, torch.Tensor]:
+        """Returns the current observations of the environment."""
+        if hasattr(self.unwrapped, "observation_manager"):
+            obs_dict = self.unwrapped.observation_manager.compute()
+        else:
+            obs_dict = self.unwrapped._get_observations()
+        return obs_dict
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -136,52 +159,90 @@ class RslRlVecEnvWrapper(VecEnv):
     def seed(self, seed: int = -1) -> int:  # noqa: D102
         return self.unwrapped.seed(seed)
 
-    def reset(self) -> tuple[TensorDict, dict]:  # noqa: D102
+    def reset(self) -> dict:  # noqa: D102
         # reset the environment
-        obs_dict, extras = self.env.reset()
-        return TensorDict(obs_dict, batch_size=[self.num_envs]), extras
+        obs_dict, _ = self.env.reset()
+        # return observations
+        return obs_dict
 
-    def get_observations(self) -> TensorDict:
-        """Returns the current observations of the environment."""
-        if hasattr(self.unwrapped, "observation_manager"):
-            obs_dict = self.unwrapped.observation_manager.compute()
-        else:
-            obs_dict = self.unwrapped._get_observations()
-        return TensorDict(obs_dict, batch_size=[self.num_envs])
-
-    def step(self, actions: torch.Tensor) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
+    def step(self, actions: torch.Tensor) -> tuple[dict, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # clip actions
         if self.clip_actions is not None:
             actions = torch.clamp(actions, -self.clip_actions, self.clip_actions)
         # record step information
-        obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
+        obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
-        dones = (terminated | truncated).to(dtype=torch.long)
-        # move time out information to the extras dict
-        # this is only needed for infinite horizon tasks
-        if not self.unwrapped.cfg.is_finite_horizon:
-            extras["time_outs"] = truncated
+        dones = dones.to(dtype=torch.long)
+        # assume that there is only one reward group
+        rew_group_name = list(rew)[0]
         # return the step information
-        return TensorDict(obs_dict, batch_size=[self.num_envs]), rew, dones, extras
+        return obs_dict, rew[rew_group_name], dones, time_outs, extras
 
     def close(self):  # noqa: D102
         return self.env.close()
 
-    """
-    Helper functions
+
+class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
+    """ 
+    This class is the modular version of the :class:`RslRlVecEnvWrapper` and is used for modular environments in RSL-RL.
+    For MIT humanoid, it has separate actor-critic networks for the legs and arms.
+
+    obs:    leg_actor, leg_critic, arm_actor, arm_critic
+    action: leg_joint_pos, arm_joint_pos
+    reward: leg_reward, arm_reward
+
     """
 
-    def _modify_action_space(self):
-        """Modifies the action space to the clip range."""
-        if self.clip_actions is None:
-            return
+    def __init__(self, env: ManagerBasedRLEnv | DirectRLEnv, clip_actions: float | None = None):
+        """Initializes the wrapper.
 
-        # modify the action space to the clip range
-        # note: this is only possible for the box action space. we need to change it in the future for other
-        #   action spaces.
-        self.env.unwrapped.single_action_space = gym.spaces.Box(
-            low=-self.clip_actions, high=self.clip_actions, shape=(self.num_actions,)
-        )
-        self.env.unwrapped.action_space = gym.vector.utils.batch_space(
-            self.env.unwrapped.single_action_space, self.num_envs
-        )
+        Note:
+            The wrapper calls :meth:`reset` at the start since the RSL-RL runner does not call reset.
+
+        Args:
+            env: The environment to wrap around.
+
+        Raises:
+            ValueError: When the environment is not an instance of :class:`ManagerBasedRLEnv` or :class:`DirectRLEnv`.
+        """
+        # check that input is valid
+        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(env.unwrapped, DirectRLEnv):
+            raise ValueError(
+                "The environment must be inherited from ManagerBasedRLEnv or DirectRLEnv. Environment type:"
+                f" {type(env)}"
+            )
+        # initialize the wrapper
+        self.env = env
+        self.clip_actions = clip_actions
+        
+        # store information required by wrapper
+        self.num_envs = self.unwrapped.num_envs
+        self.device = self.unwrapped.device
+        self.max_episode_length = self.unwrapped.max_episode_length
+
+        self.num_actions = {"leg": self.unwrapped.action_manager.get_term('leg_joint_pos').action_dim,
+                            "arm": self.unwrapped.action_manager.get_term('arm_joint_pos').action_dim}
+        
+        self.num_actor_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_actor"][0],
+                              "arm": self.unwrapped.observation_manager.group_obs_dim["arm_actor"][0]}
+        
+        self.num_critic_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_critic"][0],
+                               "arm": self.unwrapped.observation_manager.group_obs_dim["arm_critic"][0]}
+
+        # reset at the start since the RSL-RL runner does not call reset
+        self.env.reset()
+
+    """
+    Operations - MDP
+    """
+
+    def step(self, actions: torch.Tensor) -> tuple[dict, dict, torch.Tensor, dict, torch.Tensor, dict]:
+        # clip actions
+        if self.clip_actions is not None:
+            actions = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+        # record step information
+        obs_dict, rew, dones, terminated, time_outs, extras = self.env.step(actions)
+        # compute dones for compatibility with RSL-RL
+        dones = dones.to(dtype=torch.long)
+        # return the step information
+        return obs_dict, rew, dones, terminated, time_outs, extras

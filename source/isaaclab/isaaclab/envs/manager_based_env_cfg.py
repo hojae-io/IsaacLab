@@ -131,3 +131,6 @@ class ManagerBasedEnvCfg:
 
     log_dir: str | None = None
     """Directory for logging experiment artifacts. Defaults to None, in which case no specific log directory is set."""
+    
+    record: bool = False
+    """Whether to record the logging data during simulation. Defaults to False."""

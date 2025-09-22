@@ -1588,6 +1588,7 @@ class Articulation(AssetBase):
 
         # -- other data that are filled based on explicit actuator models
         self._data.soft_joint_vel_limits = torch.zeros(self.num_instances, self.num_joints, device=self.device)
+        self._data.soft_joint_torque_limits = torch.zeros(self.num_instances, self.num_joints, device=self.device)
         self._data.gear_ratio = torch.ones(self.num_instances, self.num_joints, device=self.device)
 
         # soft joint position limits (recommended not to be too close to limits).
@@ -1837,7 +1838,10 @@ class Articulation(AssetBase):
             self._data.computed_torque[:, actuator.joint_indices] = actuator.computed_effort
             self._data.applied_torque[:, actuator.joint_indices] = actuator.applied_effort
             # -- actuator data
-            self._data.soft_joint_vel_limits[:, actuator.joint_indices] = actuator.velocity_limit
+            self._data.soft_joint_vel_limits[:, actuator.joint_indices] = actuator.velocity_limit * \
+                                                                          self.cfg.soft_joint_vel_limit_factor
+            self._data.soft_joint_torque_limits[:, actuator.joint_indices] = actuator.effort_limit * \
+                                                                             self.cfg.soft_joint_torque_limit_factor
             # TODO: find a cleaner way to handle gear ratio. Only needed for variable gear ratio actuators.
             if hasattr(actuator, "gear_ratio"):
                 self._data.gear_ratio[:, actuator.joint_indices] = actuator.gear_ratio

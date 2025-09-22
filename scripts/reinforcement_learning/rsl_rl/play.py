@@ -175,7 +175,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dt = env.unwrapped.step_dt
 
     # reset environment
-    obs = env.get_observations()
+    obs_dict = env.get_observations()
+    obs = obs_dict["actor"]
     timestep = 0
     # simulate environment
     while simulation_app.is_running():

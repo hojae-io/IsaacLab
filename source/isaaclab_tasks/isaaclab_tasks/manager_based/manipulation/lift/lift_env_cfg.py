@@ -135,42 +135,55 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
+    @configclass
+    class ArmRewardsCfg:
 
-    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.04}, weight=15.0)
+        reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
 
-    object_goal_tracking = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.04, "command_name": "object_pose"},
-        weight=16.0,
-    )
+        lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.04}, weight=15.0)
 
-    object_goal_tracking_fine_grained = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
-        weight=5.0,
-    )
+        object_goal_tracking = RewTerm(
+            func=mdp.object_goal_distance,
+            params={"std": 0.3, "minimal_height": 0.04, "command_name": "object_pose"},
+            weight=16.0,
+        )
 
-    # action penalty
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+        object_goal_tracking_fine_grained = RewTerm(
+            func=mdp.object_goal_distance,
+            params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
+            weight=5.0,
+        )
 
-    joint_vel = RewTerm(
-        func=mdp.joint_vel_l2,
-        weight=-1e-4,
-        params={"asset_cfg": SceneEntityCfg("robot")},
-    )
+        # action penalty
+        # action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+
+        joint_vel = RewTerm(
+            func=mdp.joint_vel_l2,
+            weight=-1e-4,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
+
+    arm: ArmRewardsCfg = ArmRewardsCfg()
 
 
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
 
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    @configclass
+    class ArmTerminationCfg:
 
-    object_dropping = DoneTerm(
-        func=mdp.root_height_below_minimum, params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("object")}
-    )
+        object_dropping = DoneTerm(
+            func=mdp.root_height_below_minimum, params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("object")}
+        )
+    
 
+    @configclass
+    class TimeOutTerminationCfg:
+        time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    arm: ArmTerminationCfg = ArmTerminationCfg()
+    time_out: TimeOutTerminationCfg = TimeOutTerminationCfg()
 
 @configclass
 class CurriculumCfg:

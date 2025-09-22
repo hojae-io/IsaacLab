@@ -5,6 +5,7 @@
 
 import builtins
 import torch
+import numpy as np
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,6 +15,7 @@ import omni.physx
 from isaacsim.core.simulation_manager import SimulationManager
 from isaacsim.core.version import get_version
 
+from isaaclab.assets import Articulation
 from isaaclab.managers import ActionManager, EventManager, ObservationManager, RecorderManager
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
@@ -115,14 +117,6 @@ class ManagerBasedEnv:
         print(f"\tRendering step-size   : {self.physics_dt * self.cfg.sim.render_interval}")
         print(f"\tEnvironment step-size : {self.step_dt}")
 
-        if self.cfg.sim.render_interval < self.cfg.decimation:
-            msg = (
-                f"The render interval ({self.cfg.sim.render_interval}) is smaller than the decimation "
-                f"({self.cfg.decimation}). Multiple render calls will happen for each environment step. "
-                "If this is not intended, set the render interval to be equal to the decimation."
-            )
-            omni.log.warn(msg)
-
         # counter for simulation steps
         self._sim_step_counter = 0
 
@@ -169,6 +163,10 @@ class ManagerBasedEnv:
                 # this is needed for the observation manager to get valid tensors for initialization.
                 # this shouldn't cause an issue since later on, users do a reset over all the environments so the lazy buffers would be reset.
                 self.scene.update(dt=self.physics_dt)
+                
+            self._init_buffers()
+            print("[INFO]: Buffers initialized.")
+
             # add timeline event to load managers
             self.load_managers()
 
@@ -179,6 +177,7 @@ class ManagerBasedEnv:
             # setup live visualizers
             self.setup_manager_visualizers()
             self._window = self.cfg.ui_window_class_type(self, window_name="IsaacLab")
+            self._create_rgb_annotator()
         else:
             # if no window, then we don't need to store the window
             self._window = None
@@ -268,6 +267,10 @@ class ManagerBasedEnv:
     """
     Operations - Setup.
     """
+
+    def _init_buffers(self):
+        self.robot: Articulation = self.scene["robot"]
+        self.total_weight = self.robot.root_physx_view.get_masses().sum(dim=1).to(self.device) * (-self.cfg.sim.gravity[2])
 
     def load_managers(self):
         """Load the managers for the environment.
@@ -491,6 +494,9 @@ class ManagerBasedEnv:
         try:
             import omni.replicator.core as rep
 
+            if seed == -1:
+                seed = np.random.randint(0, 10000)
+
             rep.set_global_seed(seed)
         except ModuleNotFoundError:
             pass
@@ -559,3 +565,31 @@ class ManagerBasedEnv:
         # -- recorder manager
         info = self.recorder_manager.reset(env_ids)
         self.extras["log"].update(info)
+
+    def _create_rgb_annotator(self):
+        import omni.replicator.core as rep
+
+        # create render product
+        self._render_product = rep.create.render_product(
+            self.cfg.viewer.cam_prim_path, self.cfg.viewer.resolution
+        )
+        # create rgb annotator -- used to read data from the render product
+        self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb", device="cpu")
+        self._rgb_annotator.attach([self._render_product])
+
+    def get_viewport_camera_image(self) -> np.ndarray:
+        """Get the image from the viewport camera.
+
+        Returns:
+            The image from the viewport camera as a numpy array.
+        """
+        # obtain the rgb data
+        rgb_data = self._rgb_annotator.get_data()
+        # convert to numpy array
+        rgb_data = np.frombuffer(rgb_data, dtype=np.uint8).reshape(*rgb_data.shape)
+        # return the rgb data
+        # note: initially the renderer is warming up and returns empty data
+        if rgb_data.size == 0:
+            return np.zeros((self.cfg.viewer.resolution[1], self.cfg.viewer.resolution[0], 3), dtype=np.uint8)
+        else:
+            return rgb_data[:, :, :3]

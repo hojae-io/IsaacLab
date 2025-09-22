@@ -164,6 +164,9 @@ class JointAction(ActionTerm):
     """
 
     def process_actions(self, actions: torch.Tensor):
+        if self.cfg.disable_action:
+            # disable action by setting it to zero
+            actions[:] = 0.
         # store the raw actions
         self._raw_actions[:] = actions
         # apply the affine transformations

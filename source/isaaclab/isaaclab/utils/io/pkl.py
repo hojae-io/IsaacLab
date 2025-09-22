@@ -7,7 +7,8 @@
 
 import os
 import pickle
-from typing import Any
+from typing import Any, Union
+from pathlib import Path
 
 
 def load_pickle(filename: str) -> Any:
@@ -28,8 +29,7 @@ def load_pickle(filename: str) -> Any:
         data = pickle.load(f)
     return data
 
-
-def dump_pickle(filename: str, data: Any):
+def dump_pickle(filename: Union[str, Path], data: Any) -> None:
     """Saves data into a pickle file safely.
 
     Note:
@@ -40,11 +40,9 @@ def dump_pickle(filename: str, data: Any):
         data: The data to save.
     """
     # check ending
-    if not filename.endswith("pkl"):
-        filename += ".pkl"
+    path = Path(filename).with_suffix(".pkl")
     # create directory
-    if not os.path.exists(os.path.dirname(filename)):
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     # save data
-    with open(filename, "wb") as f:
+    with path.open("wb") as f:
         pickle.dump(data, f)
