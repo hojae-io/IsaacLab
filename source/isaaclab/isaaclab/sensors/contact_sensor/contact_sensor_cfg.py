@@ -74,6 +74,11 @@ class ContactSensorCfg(SensorBaseCfg):
     .. note::
         This attribute is only used when debug visualization is enabled.
     """
+    length_scale: float = 1.0
+    """The scale factor for the length of the contact force arrow. Defaults to 1.0."""
+
+    thickness_scale: float = 1.0
+    """The scale factor for the thickness of the contact force arrow. Defaults to 1.0."""
 
     max_contact_data_count_per_env: int = 0
     """The maximum number of contact data entries per environment to store globally for detailed contact reporting.

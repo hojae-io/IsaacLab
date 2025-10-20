@@ -602,9 +602,11 @@ class ContactSensor(SensorBase):
 
             default_scale = self.contact_visualizer.cfg.markers["arrow"].scale
             GRF_arrow_scale = torch.tensor(default_scale, device=self.device).repeat(GRF_norm_vector.shape[0], 1)
-            GRF_arrow_scale[:, 0] = (self._data.GRF_forces_buffer[mask].norm(dim=1) * 0.05)
+            GRF_arrow_scale[:, 0] *= (self._data.GRF_forces_buffer[mask].norm(dim=1) * self.cfg.length_scale)
+            GRF_arrow_scale[:, 1] *= self.cfg.thickness_scale
+            GRF_arrow_scale[:, 2] *= self.cfg.thickness_scale
 
-            local_offset = 0.1 * GRF_arrow_scale[:, 0:1] * torch.tensor([0.25, 0.0, 0.0], device=self.device) # The given pos divides the arrow 3:1 = head:tail
+            local_offset = default_scale[0] * GRF_arrow_scale[:, 0:1] * torch.tensor([0.25, 0.0, 0.0], device=self.device) # The given pos divides the arrow 3:1 = head:tail
             transformed_offset = (math_utils.matrix_from_quat(GRF_arrow_quat) @ local_offset.unsqueeze(-1)).squeeze(-1)
             GRF_arrow_pos_w = self._data.friction_points_buffer[mask] + transformed_offset
 
