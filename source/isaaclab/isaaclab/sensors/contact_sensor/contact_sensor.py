@@ -478,10 +478,11 @@ class ContactSensor(SensorBase):
                 diff = friction_points_buffer.unsqueeze(2) - contact_points_buffer.unsqueeze(1)
                 distances = diff.norm(dim=-1)
                 mask = distances < tol
-                contact_force_z_sum = (contact_forces_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2)  # shape: (N, F, 1)
+                contact_forces_xyz_buffer = contact_normals_buffer * contact_forces_buffer
+                contact_forces_xyz_sum = (contact_forces_xyz_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2) # shape: (N, F, 3)
 
                 GRF_forces_buffer = friction_forces_buffer.clone()
-                GRF_forces_buffer[..., 2:3] = contact_force_z_sum
+                GRF_forces_buffer += contact_forces_xyz_sum
 
                 GRF_points_buffer = friction_points_buffer.clone()
                 GRF_count_buffer = friction_count_buffer.clone()
@@ -610,7 +611,9 @@ class ContactSensor(SensorBase):
             transformed_offset = (math_utils.matrix_from_quat(GRF_arrow_quat) @ local_offset.unsqueeze(-1)).squeeze(-1)
             GRF_arrow_pos_w = self._data.friction_points_buffer[mask] + transformed_offset
 
-            self.contact_visualizer.visualize(GRF_arrow_pos_w, GRF_arrow_quat, GRF_arrow_scale)
+            marker_indices = torch.zeros(GRF_arrow_scale.shape[0]) # TODO: Update when you have multiple markers
+
+            self.contact_visualizer.visualize(GRF_arrow_pos_w, GRF_arrow_quat, GRF_arrow_scale, marker_indices)
 
 
     """
