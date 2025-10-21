@@ -167,9 +167,9 @@ class ContactSensor(SensorBase):
                 self._data.friction_count_buffer[env_ids] = 0
                 self._data.friction_start_indices_buffer[env_ids] = 0
 
-                self._data.GRF_forces_buffer[env_ids] = 0.0
-                self._data.GRF_points_buffer[env_ids] = 0.0
-                self._data.GRF_count_buffer[env_ids] = 0
+                self._data.CRF_forces_buffer[env_ids] = 0.0
+                self._data.CRF_points_buffer[env_ids] = 0.0
+                self._data.CRF_count_buffer[env_ids] = 0
         # reset the current air time
         if self.cfg.track_air_time:
             self._data.current_air_time[env_ids] = 0.0
@@ -373,9 +373,9 @@ class ContactSensor(SensorBase):
                 self._data.friction_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
                 self._data.friction_start_indices_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
 
-                self._data.GRF_forces_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
-                self._data.GRF_points_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
-                self._data.GRF_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
+                self._data.CRF_forces_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.CRF_points_buffer = torch.zeros(self._num_envs, self.cfg.max_contact_data_count_per_env, 3, device=self._device)
+                self._data.CRF_count_buffer = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
 
     def _update_buffers_impl(self, env_ids: Sequence[int]):
         """Fills the buffers of the sensor data."""
@@ -468,11 +468,11 @@ class ContactSensor(SensorBase):
                 self._data.friction_count_buffer[env_ids] = friction_count_buffer
                 self._data.friction_start_indices_buffer[env_ids] = friction_start_indices_buffer
 
-                # Post-processing for Ground Reaction Forces (GRF) = Concatenation of friction (f_x, f_y) and contact (f_z) forces
+                # Post-processing for Contact Reaction Forces (CRF) = Concatenation of friction (f_x, f_y) and contact (f_z) forces
 
-                GRF_forces_buffer = self._data.GRF_forces_buffer[env_ids]
-                GRF_points_buffer = self._data.GRF_points_buffer[env_ids]
-                GRF_count_buffer = self._data.GRF_count_buffer[env_ids]
+                CRF_forces_buffer = self._data.CRF_forces_buffer[env_ids]
+                CRF_points_buffer = self._data.CRF_points_buffer[env_ids]
+                CRF_count_buffer = self._data.CRF_count_buffer[env_ids]
 
                 tol = 1e-2
                 diff = friction_points_buffer.unsqueeze(2) - contact_points_buffer.unsqueeze(1)
@@ -481,15 +481,15 @@ class ContactSensor(SensorBase):
                 contact_forces_xyz_buffer = contact_normals_buffer * contact_forces_buffer
                 contact_forces_xyz_sum = (contact_forces_xyz_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2) # shape: (N, F, 3)
 
-                GRF_forces_buffer = friction_forces_buffer.clone()
-                GRF_forces_buffer += contact_forces_xyz_sum
+                CRF_forces_buffer = friction_forces_buffer.clone()
+                CRF_forces_buffer += contact_forces_xyz_sum
 
-                GRF_points_buffer = friction_points_buffer.clone()
-                GRF_count_buffer = friction_count_buffer.clone()
+                CRF_points_buffer = friction_points_buffer.clone()
+                CRF_count_buffer = friction_count_buffer.clone()
 
-                self._data.GRF_forces_buffer[env_ids] = GRF_forces_buffer
-                self._data.GRF_points_buffer[env_ids] = GRF_points_buffer
-                self._data.GRF_count_buffer[env_ids] = GRF_count_buffer
+                self._data.CRF_forces_buffer[env_ids] = CRF_forces_buffer
+                self._data.CRF_points_buffer[env_ids] = CRF_points_buffer
+                self._data.CRF_count_buffer[env_ids] = CRF_count_buffer
 
         # obtain the pose of the sensor origin
         if self.cfg.track_pose:
@@ -593,27 +593,27 @@ class ContactSensor(SensorBase):
                 Direction of the arrow is the (friction_forces_x, friction_forces_y, contact forces)
             """
             rel_idx = torch.arange(self.cfg.max_contact_data_count_per_env, device=self.device).unsqueeze(0)  # Shape: (1, max_contacts)
-            mask = rel_idx < self._data.GRF_count_buffer.unsqueeze(1)  # Shape: (N, K)
+            mask = rel_idx < self._data.CRF_count_buffer.unsqueeze(1)  # Shape: (N, K)
 
-            GRF_norm_vector = torch.nn.functional.normalize(self._data.GRF_forces_buffer[mask])
-            base_vector = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(GRF_norm_vector.shape[0], 1)
-            axis = torch.cross(base_vector, GRF_norm_vector, dim=1)
-            angle = torch.acos(torch.clamp(torch.sum(base_vector * GRF_norm_vector, dim=1), -1.0, 1.0))
-            GRF_arrow_quat = math_utils.quat_from_angle_axis(angle, axis)
+            CRF_norm_vector = torch.nn.functional.normalize(self._data.CRF_forces_buffer[mask])
+            base_vector = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(CRF_norm_vector.shape[0], 1)
+            axis = torch.cross(base_vector, CRF_norm_vector, dim=1)
+            angle = torch.acos(torch.clamp(torch.sum(base_vector * CRF_norm_vector, dim=1), -1.0, 1.0))
+            CRF_arrow_quat = math_utils.quat_from_angle_axis(angle, axis)
 
             default_scale = self.contact_visualizer.cfg.markers["arrow"].scale
-            GRF_arrow_scale = torch.tensor(default_scale, device=self.device).repeat(GRF_norm_vector.shape[0], 1)
-            GRF_arrow_scale[:, 0] *= (self._data.GRF_forces_buffer[mask].norm(dim=1) * self.cfg.length_scale)
-            GRF_arrow_scale[:, 1] *= self.cfg.thickness_scale
-            GRF_arrow_scale[:, 2] *= self.cfg.thickness_scale
+            CRF_arrow_scale = torch.tensor(default_scale, device=self.device).repeat(CRF_norm_vector.shape[0], 1)
+            CRF_arrow_scale[:, 0] *= (self._data.CRF_forces_buffer[mask].norm(dim=1) * self.cfg.length_scale)
+            CRF_arrow_scale[:, 1] *= self.cfg.thickness_scale
+            CRF_arrow_scale[:, 2] *= self.cfg.thickness_scale
 
-            local_offset = default_scale[0] * GRF_arrow_scale[:, 0:1] * torch.tensor([0.25, 0.0, 0.0], device=self.device) # The given pos divides the arrow 3:1 = head:tail
-            transformed_offset = (math_utils.matrix_from_quat(GRF_arrow_quat) @ local_offset.unsqueeze(-1)).squeeze(-1)
-            GRF_arrow_pos_w = self._data.friction_points_buffer[mask] + transformed_offset
+            local_offset = default_scale[0] * CRF_arrow_scale[:, 0:1] * torch.tensor([0.25, 0.0, 0.0], device=self.device) # The given pos divides the arrow 3:1 = head:tail
+            transformed_offset = (math_utils.matrix_from_quat(CRF_arrow_quat) @ local_offset.unsqueeze(-1)).squeeze(-1)
+            CRF_arrow_pos_w = self._data.friction_points_buffer[mask] + transformed_offset
 
-            marker_indices = torch.zeros(GRF_arrow_scale.shape[0]) # TODO: Update when you have multiple markers
+            marker_indices = torch.zeros(CRF_arrow_scale.shape[0]) # TODO: Update when you have multiple markers
 
-            self.contact_visualizer.visualize(GRF_arrow_pos_w, GRF_arrow_quat, GRF_arrow_scale, marker_indices)
+            self.contact_visualizer.visualize(CRF_arrow_pos_w, CRF_arrow_quat, CRF_arrow_scale, marker_indices)
 
 
     """
