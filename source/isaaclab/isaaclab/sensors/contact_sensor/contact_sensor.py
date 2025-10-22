@@ -475,14 +475,14 @@ class ContactSensor(SensorBase):
                 CRF_count_buffer = self._data.CRF_count_buffer[env_ids]
 
                 tol = 1e-2
-                diff = friction_points_buffer.unsqueeze(2) - contact_points_buffer.unsqueeze(1)
+                diff = contact_points_buffer.unsqueeze(2) - friction_points_buffer.unsqueeze(1)
                 distances = diff.norm(dim=-1)
                 mask = distances < tol
                 contact_forces_xyz_buffer = contact_normals_buffer * contact_forces_buffer
-                contact_forces_xyz_sum = (contact_forces_xyz_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2) # shape: (N, F, 3)
+                friction_force_sum = (friction_forces_buffer.unsqueeze(1) * mask.unsqueeze(-1)).sum(dim=2)  # shape: (N, F, 1)
 
-                CRF_forces_buffer = friction_forces_buffer.clone()
-                CRF_forces_buffer += contact_forces_xyz_sum
+                CRF_forces_buffer = contact_forces_xyz_buffer.clone()
+                CRF_forces_buffer += friction_force_sum
 
                 CRF_points_buffer = friction_points_buffer.clone()
                 CRF_count_buffer = friction_count_buffer.clone()
