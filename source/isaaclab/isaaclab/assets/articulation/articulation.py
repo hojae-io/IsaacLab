@@ -180,6 +180,10 @@ class Articulation(AssetBase):
         self._external_force_b[env_ids] = 0.0
         self._external_torque_b[env_ids] = 0.0
         self._external_wrench_positions_b[env_ids] = 0.0
+        # reset data
+        self._data.joint_pos_target[env_ids] = 0.0
+        self._data.joint_vel_target[env_ids] = 0.0
+        self._data.joint_effort_target[env_ids] = 0.0
 
     def write_data_to_sim(self):
         """Write external wrenches and joint commands to the simulation.
