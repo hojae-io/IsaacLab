@@ -25,7 +25,7 @@ class RslRlPpoActorCriticCfg:
     class_name: str = "ActorCritic"
     """The policy class name. Default is ActorCritic."""
 
-    init_noise_std: float = MISSING
+    init_noise_std: float | list[float] = MISSING
     """The initial noise standard deviation for the policy."""
 
     noise_std_type: Literal["scalar", "log"] = "scalar"
