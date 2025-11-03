@@ -293,9 +293,11 @@ class ContactSensor(SensorBase):
         body_names_regex = r"(" + "|".join(body_names) + r")"
         body_names_regex = f"{self.cfg.prim_path.rsplit('/', 1)[0]}/{body_names_regex}"
         # convert regex expressions to glob expressions for PhysX
-        body_names_glob = body_names_regex.replace(".*", "*")
-        filter_prim_paths_glob = [expr.replace(".*", "*") for expr in self.cfg.filter_prim_paths_expr]
-
+        body_names_glob = [body_names_regex.replace("env_.*", f"env_{i}") for i in range(self._num_envs)]
+        filter_prim_paths_glob = [
+            [p.replace("env_.*", f"env_{i}") for p in self.cfg.filter_prim_paths_expr]
+            for i in range(self._num_envs)
+        ]
         # create a rigid prim view for the sensor
         self._body_physx_view = self._physics_sim_view.create_rigid_body_view(body_names_glob)
         self._contact_physx_view = self._physics_sim_view.create_rigid_contact_view(
@@ -577,8 +579,8 @@ class ContactSensor(SensorBase):
         if self.cfg.max_contact_data_count_per_env == 0:
             # marker indices
             # 0: contact, 1: no contact
-            net_contact_force_w = torch.norm(self._data.net_forces_w, dim=-1)
-            marker_indices = torch.where(net_contact_force_w > self.cfg.force_threshold, 0, 1)
+            net_filtered_contact_force_w = torch.norm(torch.sum(self._data.force_matrix_w, dim=2), dim=-1)
+            marker_indices = torch.where(net_filtered_contact_force_w > self.cfg.force_threshold, 0, 1)
             # check if prim is visualized
             if self.cfg.track_pose:
                 frame_origins: torch.Tensor = self._data.pos_w
