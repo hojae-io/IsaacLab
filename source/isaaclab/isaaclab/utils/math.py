@@ -80,7 +80,7 @@ def saturate(x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor) -> torch
     return torch.max(torch.min(x, upper), lower)
 
 
-# @torch.jit.script
+@torch.jit.script
 def normalize(x: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
     """Normalizes a given input tensor to unit length.
 
@@ -91,6 +91,7 @@ def normalize(x: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
     Returns:
         Normalized tensor of shape (N, dims).
     """
+    x = x.to(dtype=torch.float32)
     return x / x.norm(p=2, dim=-1).clamp(min=eps, max=None).unsqueeze(-1)
 
 
