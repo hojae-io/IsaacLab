@@ -761,6 +761,8 @@ class Articulation(AssetBase):
         self._data.joint_vel_limits[env_ids, joint_ids] = limits
         # set into simulation
         self.root_physx_view.set_dof_max_velocities(self._data.joint_vel_limits.cpu(), indices=physx_env_ids.cpu())
+        # add to data
+        self._data.soft_joint_vel_limits[env_ids, joint_ids] = limits * self.cfg.soft_joint_vel_limit_factor
 
     def write_joint_effort_limit_to_sim(
         self,
@@ -796,6 +798,8 @@ class Articulation(AssetBase):
         self._data.joint_effort_limits[env_ids, joint_ids] = limits
         # set into simulation
         self.root_physx_view.set_dof_max_forces(self._data.joint_effort_limits.cpu(), indices=physx_env_ids.cpu())
+        # add to data
+        self._data.soft_joint_torque_limits[env_ids, joint_ids] = limits * self.cfg.soft_joint_torque_limit_factor
 
     def write_joint_armature_to_sim(
         self,
@@ -1731,6 +1735,9 @@ class Articulation(AssetBase):
             if int(get_version()[2]) >= 5:
                 self._data.default_joint_dynamic_friction_coeff[:, actuator.joint_indices] = actuator.dynamic_friction
                 self._data.default_joint_viscous_friction_coeff[:, actuator.joint_indices] = actuator.viscous_friction
+            # gear ratio
+            if hasattr(actuator, "gear_ratio"):
+                self._data.gear_ratio[:, actuator.joint_indices] = actuator.gear_ratio
 
         # perform some sanity checks to ensure actuators are prepared correctly
         total_act_joints = sum(actuator.num_joints for actuator in self.actuators.values())
@@ -1841,14 +1848,6 @@ class Articulation(AssetBase):
             # -- torques
             self._data.computed_torque[:, actuator.joint_indices] = actuator.computed_effort
             self._data.applied_torque[:, actuator.joint_indices] = actuator.applied_effort
-            # -- actuator data
-            self._data.soft_joint_vel_limits[:, actuator.joint_indices] = actuator.velocity_limit * \
-                                                                          self.cfg.soft_joint_vel_limit_factor
-            self._data.soft_joint_torque_limits[:, actuator.joint_indices] = actuator.effort_limit * \
-                                                                             self.cfg.soft_joint_torque_limit_factor
-            # TODO: find a cleaner way to handle gear ratio. Only needed for variable gear ratio actuators.
-            if hasattr(actuator, "gear_ratio"):
-                self._data.gear_ratio[:, actuator.joint_indices] = actuator.gear_ratio
 
     """
     Internal helpers -- Debugging.

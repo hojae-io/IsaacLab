@@ -195,9 +195,17 @@ class IdealPDActuatorCfg(ActuatorBaseCfg):
 
 @configclass
 class TorqueActuatorCfg(ActuatorBaseCfg):
-    """Configuration for an ideal PD actuator."""
+    """Configuration for a torque actuator.
+    
+    Note:
+        This actuator directly applies torque commands without PD control.
+        Stiffness and damping are not used.
+    """
 
     class_type: type = actuator_pd.TorqueActuator
+    # we don't use stiffness and damping for torque actuator
+    stiffness = None
+    damping = None
 
 
 @configclass
