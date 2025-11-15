@@ -56,7 +56,7 @@ FRAME_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "frame": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
-            scale=(0.5, 0.5, 0.5),
+            scale=(0.1, 0.1, 0.1),
         ),
         "connecting_line": sim_utils.CylinderCfg(
             radius=0.002,
