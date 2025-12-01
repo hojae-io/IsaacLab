@@ -96,6 +96,8 @@ class ActionTermCfg:
     clip: dict[str, tuple] | None = None
     """Clip range for the action (dict of regex expressions). Defaults to None."""
 
+    disable_action: bool = False
+    """Whether to disable the action term. Defaults to False."""
 
 ##
 # Command manager.
