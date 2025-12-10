@@ -975,7 +975,7 @@ class ArticulationData:
     def body_link_lin_vel_w(self) -> torch.Tensor:
         """Linear velocity of all bodies in simulation world frame. Shape is (num_instances, num_bodies, 3).
 
-        This quantity is the linear velocity of the articulation bodies' center of mass frame relative to the world.
+        This quantity is the linear velocity of the articulation links' actor frame relative to the world.
         """
         return self.body_link_vel_w[..., :3]
 
@@ -983,7 +983,7 @@ class ArticulationData:
     def body_link_ang_vel_w(self) -> torch.Tensor:
         """Angular velocity of all bodies in simulation world frame. Shape is (num_instances, num_bodies, 3).
 
-        This quantity is the angular velocity of the articulation bodies' center of mass frame relative to the world.
+        This quantity is the angular velocity of the articulation links' actor frame relative to the world.
         """
         return self.body_link_vel_w[..., 3:6]
 
@@ -1041,7 +1041,7 @@ class ArticulationData:
         """Center of mass position of all of the bodies in their respective link frames.
         Shape is (num_instances, num_bodies, 3).
 
-        This quantity is the center of mass location relative to its body'slink frame.
+        This quantity is the center of mass location relative to its body's link frame.
         """
         return self.body_com_pose_b[..., :3]
 
