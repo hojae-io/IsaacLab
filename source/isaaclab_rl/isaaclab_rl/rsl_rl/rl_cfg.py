@@ -238,14 +238,11 @@ class RslRlOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
 class RslRlModularOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
     """Configuration of the runner for modular on-policy algorithms."""
 
-    leg_policy: RslRlPpoActorCriticCfg = MISSING
-    """The leg policy configuration."""
+    class_name: str = "ModularOnPolicyRunner"
+    """The runner class name. Default is ModularOnPolicyRunner."""
 
-    arm_policy: RslRlPpoActorCriticCfg = MISSING
-    """The arm policy configuration."""
+    policies: dict[str, RslRlPpoActorCriticCfg] = MISSING
+    """The policies configuration."""
 
-    leg_algorithm: RslRlPpoAlgorithmCfg = MISSING
-    """The leg algorithm configuration."""
-
-    arm_algorithm: RslRlPpoAlgorithmCfg = MISSING
-    """The arm algorithm configuration."""
+    algorithms: dict[str, RslRlPpoAlgorithmCfg] = MISSING
+    """The algorithms configuration."""
