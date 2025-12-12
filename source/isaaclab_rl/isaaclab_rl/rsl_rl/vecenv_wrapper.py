@@ -186,11 +186,18 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
     """ 
     This class is the modular version of the :class:`RslRlVecEnvWrapper` and is used for modular environments in RSL-RL.
     For MIT humanoid, it has separate actor-critic networks for the legs and arms.
+    For Manipulator, it has separate actor-critic networks for the arm and the hand.
 
-    obs:    leg_actor, leg_critic, arm_actor, arm_critic
-    action: leg_joint_pos, arm_joint_pos
-    reward: leg_reward, arm_reward
-
+    Example:
+        - MIT humanoid:
+            obs:    leg_actor, leg_critic, arm_actor, arm_critic
+            action: leg_joint_pos, arm_joint_pos
+            reward: leg_reward, arm_reward
+        - Manipulator:
+            obs:    arm_actor, arm_critic, hand_actor, hand_critic
+            action: arm_joint_pos, hand_joint_pos
+            reward: arm_reward, hand_reward
+        etc.
     """
 
     def __init__(self, env: ManagerBasedRLEnv | DirectRLEnv, clip_actions: float | None = None):
@@ -220,14 +227,15 @@ class RslRlModularVecEnvWrapper(RslRlVecEnvWrapper):
         self.device = self.unwrapped.device
         self.max_episode_length = self.unwrapped.max_episode_length
 
-        self.num_actions = {"leg": self.unwrapped.action_manager.get_term('leg_joint_pos').action_dim,
-                            "arm": self.unwrapped.action_manager.get_term('arm_joint_pos').action_dim}
-        
-        self.num_actor_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_actor"][0],
-                              "arm": self.unwrapped.observation_manager.group_obs_dim["arm_actor"][0]}
-        
-        self.num_critic_obs = {"leg": self.unwrapped.observation_manager.group_obs_dim["leg_critic"][0],
-                               "arm": self.unwrapped.observation_manager.group_obs_dim["arm_critic"][0]}
+        self.num_actions = {term_name: term_dim for term_name, term_dim in
+            zip(self.unwrapped.action_manager.active_terms, self.unwrapped.action_manager.action_term_dim)
+        }
+        self.num_actor_obs = {group_name: obs_dim[0] for group_name, obs_dim in 
+            self.unwrapped.observation_manager.group_obs_dim.items() if group_name.endswith('actor')
+        }
+        self.num_critic_obs = {group_name: obs_dim[0] for group_name, obs_dim in 
+            self.unwrapped.observation_manager.group_obs_dim.items() if group_name.endswith('critic')
+        }
 
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
