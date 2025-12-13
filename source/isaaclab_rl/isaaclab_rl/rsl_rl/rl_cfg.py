@@ -128,6 +128,9 @@ class RslRlPpoAlgorithmCfg:
 class RslRlBaseRunnerCfg:
     """Base configuration of the runner."""
 
+    class_name: str = MISSING
+    """The runner class name."""
+
     seed: int = 42
     """The seed for the experiment. Default is 42."""
 
