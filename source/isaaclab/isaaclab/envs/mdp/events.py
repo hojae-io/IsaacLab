@@ -106,6 +106,16 @@ def randomize_rigid_body_scale(
     else:
         rand_samples = math_utils.sample_uniform(*scale_range, (len(env_ids), 1), device="cpu")
         rand_samples = rand_samples.repeat(1, 3)
+    
+    # Store scale factors as asset-specific attribute (tensor shape: [num_envs, 3])
+    # Initialize if it doesn't exist or is None
+    if not hasattr(asset, "_scale_factors") or asset._scale_factors is None:
+        # Initialize with ones for all environments
+        asset._scale_factors = torch.ones((env.scene.num_envs, 3), device=env.device)
+    
+    # Update scale factors for the specified environments
+    asset._scale_factors[env_ids] = rand_samples
+    
     # convert to list for the for loop
     rand_samples = rand_samples.tolist()
 
@@ -121,30 +131,35 @@ def randomize_rigid_body_scale(
         for i, env_id in enumerate(env_ids):
             # path to prim to randomize
             prim_path = prim_paths[env_id] + relative_child_path
-            # spawn single instance
-            prim_spec = Sdf.CreatePrimInLayer(stage.GetRootLayer(), prim_path)
-
-            # get the attribute to randomize
-            scale_spec = prim_spec.GetAttributeAtPath(prim_path + ".xformOp:scale")
-            # if the scale attribute does not exist, create it
-            has_scale_attr = scale_spec is not None
-            if not has_scale_attr:
-                scale_spec = Sdf.AttributeSpec(prim_spec, prim_path + ".xformOp:scale", Sdf.ValueTypeNames.Double3)
-
-            # set the new scale
-            scale_spec.default = Gf.Vec3f(*rand_samples[i])
-
-            # ensure the operation is done in the right ordering if we created the scale attribute.
-            # otherwise, we assume the scale attribute is already in the right order.
-            # note: by default isaac sim follows this ordering for the transform stack so any asset
-            #   created through it will have the correct ordering
-            if not has_scale_attr:
-                op_order_spec = prim_spec.GetAttributeAtPath(prim_path + ".xformOpOrder")
-                if op_order_spec is None:
-                    op_order_spec = Sdf.AttributeSpec(
-                        prim_spec, UsdGeom.Tokens.xformOpOrder, Sdf.ValueTypeNames.TokenArray
-                    )
-                op_order_spec.default = Vt.TokenArray(["xformOp:translate", "xformOp:orient", "xformOp:scale"])
+            
+            # Get the actual prim (works for both directly spawned and referenced prims)
+            prim = stage.GetPrimAtPath(prim_path)
+            
+            if not prim.IsValid():
+                raise ValueError(f"Prim at path '{prim_path}' is not valid. Cannot apply scale randomization.")
+            
+            xform = UsdGeom.Xformable(prim)
+            
+            # Get existing scale op if it exists
+            scale_op = None
+            existing_ops = xform.GetOrderedXformOps()
+            for op in existing_ops:
+                if op.GetOpType() == UsdGeom.XformOp.TypeScale:
+                    scale_op = op
+                    break
+            
+            # Create scale op if it doesn't exist
+            if scale_op is None:
+                # Add scale op (this creates an override for referenced prims)
+                scale_op = xform.AddScaleOp(UsdGeom.XformOp.PrecisionDouble)
+                
+                # Preserve existing ops and add scale at the end
+                new_order = list(existing_ops)
+                new_order.append(scale_op)
+                xform.SetXformOpOrder(new_order)
+            
+            # Set the scale value
+            scale_op.Set(Gf.Vec3d(*rand_samples[i]))
 
 
 class randomize_rigid_body_material(ManagerTermBase):
