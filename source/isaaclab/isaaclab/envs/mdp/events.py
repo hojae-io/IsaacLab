@@ -114,7 +114,7 @@ def randomize_rigid_body_scale(
         asset._scale_factors = torch.ones((env.scene.num_envs, 3), device=env.device)
     
     # Update scale factors for the specified environments
-    asset._scale_factors[env_ids] = rand_samples
+    asset._scale_factors[env_ids] = rand_samples.to(env.device)
     
     # convert to list for the for loop
     rand_samples = rand_samples.tolist()
