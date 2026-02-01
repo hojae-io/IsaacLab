@@ -72,7 +72,7 @@ class ContactSensorSceneCfg(InteractiveSceneCfg):
         history_length=6,
         debug_vis=True,
         filter_prim_paths_expr=["{ENV_REGEX_NS}/Cube"],
-        max_contact_data_count_per_env=5
+        max_contact_data_count_per_filter_prim=4
     )
 
     contact_forces_RF = ContactSensorCfg(
@@ -81,7 +81,7 @@ class ContactSensorSceneCfg(InteractiveSceneCfg):
         history_length=6,
         debug_vis=True,
         filter_prim_paths_expr=["/World/defaultGroundPlane/GroundPlane/CollisionPlane"],
-        max_contact_data_count_per_env=5
+        max_contact_data_count_per_filter_prim=4
     )
 
     contact_forces_H = ContactSensorCfg(
