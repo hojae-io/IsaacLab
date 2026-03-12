@@ -49,6 +49,9 @@ class RslRlPpoActorCriticCfg:
     normalize_obs: bool = MISSING
     """Whether to normalize observations."""
 
+    log_std_bounds: list | None = None
+    """The bounds for the log of the standard deviation."""
+
     custom_initialization: bool = MISSING
     """Whether to use custom initialization."""
 
