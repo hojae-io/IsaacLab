@@ -182,6 +182,21 @@ class ContactSensor(SensorBase):
         """
         return self._data.CRF_forces_buffer
 
+    @property
+    def CRF_points(self) -> torch.Tensor:
+        """Contact reaction force points in world frame.
+
+        Returns:
+            A tensor containing the contact reaction force points.
+            Shape is (N, B, M, D, 3), where 
+            - N is the number of sensors (= environments), 
+            - B is the number of bodies per sensor, 
+            - M is the number of filter primitives, 
+            - D is the maximum number of contact data per filter primitive 
+            - 3 is the dimension of the point vector.
+        """
+        return self._data.CRF_points_buffer
+
     """
     Operations
     """
