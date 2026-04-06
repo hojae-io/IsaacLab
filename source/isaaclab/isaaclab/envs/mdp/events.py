@@ -730,7 +730,29 @@ class randomize_joint_parameters(ManagerTermBase):
                 distribution=distribution,
             )
             self.asset.write_joint_friction_coefficient_to_sim(
-                friction_coeff[env_ids[:, None], joint_ids], joint_ids=joint_ids, env_ids=env_ids
+                friction_coeff[env_ids, joint_ids], joint_ids=joint_ids, env_ids=env_ids
+            )
+            dynamic_friction_coeff = _randomize_prop_by_op(
+                self.asset.data.default_joint_dynamic_friction_coeff.clone(),
+                friction_distribution_params,
+                env_ids,
+                joint_ids,
+                operation=operation,
+                distribution=distribution,
+            )
+            self.asset.write_joint_dynamic_friction_coefficient_to_sim(
+                dynamic_friction_coeff[env_ids, joint_ids], joint_ids=joint_ids, env_ids=env_ids
+            )
+            viscous_friction_coeff = _randomize_prop_by_op(
+                self.asset.data.default_joint_viscous_friction_coeff.clone(),
+                friction_distribution_params,
+                env_ids,
+                joint_ids,
+                operation=operation,
+                distribution=distribution,
+            )
+            self.asset.write_joint_viscous_friction_coefficient_to_sim(
+                viscous_friction_coeff[env_ids, joint_ids], joint_ids=joint_ids, env_ids=env_ids
             )
 
         # joint armature
@@ -744,7 +766,7 @@ class randomize_joint_parameters(ManagerTermBase):
                 distribution=distribution,
             )
             self.asset.write_joint_armature_to_sim(
-                armature[env_ids[:, None], joint_ids], joint_ids=joint_ids, env_ids=env_ids
+                armature[env_ids, joint_ids], joint_ids=joint_ids, env_ids=env_ids
             )
 
         # joint position limits
@@ -772,7 +794,7 @@ class randomize_joint_parameters(ManagerTermBase):
                 )
 
             # extract the position limits for the concerned joints
-            joint_pos_limits = joint_pos_limits[env_ids[:, None], joint_ids]
+            joint_pos_limits = joint_pos_limits[env_ids, joint_ids]
             if (joint_pos_limits[..., 0] > joint_pos_limits[..., 1]).any():
                 raise ValueError(
                     "Randomization term 'randomize_joint_parameters' is setting lower joint limits that are greater"
