@@ -161,7 +161,7 @@ class VisualizationMarkers:
         self._add_markers_prototypes(self.cfg.markers)
         # Note: We need to do this the first time to initialize the instancer.
         #   Otherwise, the instancer will not be "created" and the function `GetInstanceIndices()` will fail.
-        self._instancer_manager.GetProtoIndicesAttr().Set(list(range(self.num_prototypes)))
+        self._instancer_manager.GetProtoIndicesAttr().Set([0] * self.num_prototypes)
         self._instancer_manager.GetPositionsAttr().Set([Gf.Vec3f(0.0)] * self.num_prototypes)
         self._count = self.num_prototypes
 

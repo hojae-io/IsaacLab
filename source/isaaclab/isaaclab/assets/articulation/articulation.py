@@ -214,6 +214,10 @@ class Articulation(AssetBase):
         # reset external wrenches.
         self._instantaneous_wrench_composer.reset(env_ids)
         self._permanent_wrench_composer.reset(env_ids)
+        # reset data
+        self._data.joint_pos_target[env_ids] = 0.0
+        self._data.joint_vel_target[env_ids] = 0.0
+        self._data.joint_effort_target[env_ids] = 0.0
 
     def write_data_to_sim(self):
         """Write external wrenches and joint commands to the simulation.
@@ -801,6 +805,8 @@ class Articulation(AssetBase):
         self._data.joint_vel_limits[env_ids, joint_ids] = limits
         # set into simulation
         self.root_physx_view.set_dof_max_velocities(self._data.joint_vel_limits.cpu(), indices=physx_env_ids.cpu())
+        # add to data
+        self._data.soft_joint_vel_limits[env_ids, joint_ids] = limits * self.cfg.soft_joint_vel_limit_factor
 
     def write_joint_effort_limit_to_sim(
         self,
@@ -836,6 +842,8 @@ class Articulation(AssetBase):
         self._data.joint_effort_limits[env_ids, joint_ids] = limits
         # set into simulation
         self.root_physx_view.set_dof_max_forces(self._data.joint_effort_limits.cpu(), indices=physx_env_ids.cpu())
+        # add to data
+        self._data.soft_joint_torque_limits[env_ids, joint_ids] = limits * self.cfg.soft_joint_torque_limit_factor
 
     def write_joint_armature_to_sim(
         self,
@@ -1652,6 +1660,7 @@ class Articulation(AssetBase):
 
         # -- other data that are filled based on explicit actuator models
         self._data.soft_joint_vel_limits = torch.zeros(self.num_instances, self.num_joints, device=self.device)
+        self._data.soft_joint_torque_limits = torch.zeros(self.num_instances, self.num_joints, device=self.device)
         self._data.gear_ratio = torch.ones(self.num_instances, self.num_joints, device=self.device)
 
         # soft joint position limits (recommended not to be too close to limits).
@@ -1790,6 +1799,9 @@ class Articulation(AssetBase):
             if get_isaac_sim_version().major >= 5:
                 self._data.default_joint_dynamic_friction_coeff[:, actuator.joint_indices] = actuator.dynamic_friction
                 self._data.default_joint_viscous_friction_coeff[:, actuator.joint_indices] = actuator.viscous_friction
+            # gear ratio
+            if hasattr(actuator, "gear_ratio"):
+                self._data.gear_ratio[:, actuator.joint_indices] = actuator.gear_ratio
 
         # perform some sanity checks to ensure actuators are prepared correctly
         total_act_joints = sum(actuator.num_joints for actuator in self.actuators.values())
@@ -1899,11 +1911,6 @@ class Articulation(AssetBase):
             # -- torques
             self._data.computed_torque[:, actuator.joint_indices] = actuator.computed_effort
             self._data.applied_torque[:, actuator.joint_indices] = actuator.applied_effort
-            # -- actuator data
-            self._data.soft_joint_vel_limits[:, actuator.joint_indices] = actuator.velocity_limit
-            # TODO: find a cleaner way to handle gear ratio. Only needed for variable gear ratio actuators.
-            if hasattr(actuator, "gear_ratio"):
-                self._data.gear_ratio[:, actuator.joint_indices] = actuator.gear_ratio
 
     """
     Internal helpers -- Debugging.

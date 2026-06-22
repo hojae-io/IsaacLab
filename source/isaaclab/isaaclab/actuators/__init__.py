@@ -33,4 +33,6 @@ from .actuator_pd_cfg import (
     IdealPDActuatorCfg,
     ImplicitActuatorCfg,
     RemotizedPDActuatorCfg,
+    TorqueActuatorCfg,
 )
+from .jacobian import apply_coupling

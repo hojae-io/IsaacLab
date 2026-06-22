@@ -13,6 +13,8 @@ import re
 
 import gymnasium as gym
 import yaml
+import argparse
+from extensions import ISAACLAB_BRL_ROOT_DIR
 
 from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
@@ -157,6 +159,57 @@ def parse_env_cfg(
     return cfg
 
 
+def set_registry_to_original_files(task: str, load_run: int = None) -> None:
+    """Set the gym registry to original files.
+
+    This function sets the gym registry to the original files for the given task name. It is used to ensure that
+    the environment configuration is loaded from the original files instead of the current version.
+
+    Args:
+        task: The name of the task to set the registry for.
+        load_run: The run to load the original files from. If None, the latest run is used.
+    """
+    # obtain the configuration entry point
+    env = gym.spec(task).entry_point
+    env_cfg = gym.spec(task).kwargs.get("env_cfg_entry_point")
+    rsl_rl_cfg = gym.spec(task).kwargs.get("rsl_rl_cfg_entry_point")
+
+    # get the path to the original files
+    log_path = os.path.join(ISAACLAB_BRL_ROOT_DIR, 'logs', 'rsl_rl', rsl_rl_cfg().experiment_name)
+
+    runs = os.listdir(log_path)
+    if 'exported' in runs: runs.remove('exported')
+    # sort matched runs by alphabetical order (latest run should be last)
+    runs.sort()
+
+    if load_run is not None:
+        run_path = os.path.join(log_path, load_run)
+    else:
+        run_path = os.path.join(log_path, runs[-1])
+
+    file_root_path= os.path.join(run_path, 'files')
+    
+    # set the gym registry to original files
+    env_module_path = os.path.join(file_root_path, env.__module__.replace('.', '/') + '.py')
+    spec = importlib.util.spec_from_file_location(env.__module__, env_module_path)
+    env_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(env_module)
+
+    env_cfg_module_path = os.path.join(file_root_path, env_cfg.__module__.replace('.', '/') + '.py')
+    spec = importlib.util.spec_from_file_location(env_cfg.__module__, env_cfg_module_path)
+    env_cfg_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(env_cfg_module)
+
+    rsl_rl_cfg_module_path = os.path.join(file_root_path, rsl_rl_cfg.__module__.replace('.', '/') + '.py')
+    spec = importlib.util.spec_from_file_location(rsl_rl_cfg.__module__, rsl_rl_cfg_module_path)
+    rsl_rl_cfg_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rsl_rl_cfg_module)
+
+    gym.spec(task).entry_point = getattr(env_module, env.__name__)
+    gym.spec(task).kwargs.update({"env_cfg_entry_point": getattr(env_cfg_module, env_cfg.__name__), 
+                                  "rsl_rl_cfg_entry_point": getattr(rsl_rl_cfg_module, rsl_rl_cfg.__name__)})
+    
+
 def get_checkpoint_path(
     log_path: str, run_dir: str = ".*", checkpoint: str = ".*", other_dirs: list[str] = None, sort_alpha: bool = True
 ) -> str:
@@ -190,9 +243,10 @@ def get_checkpoint_path(
     # check if runs present in directory
     try:
         # find all runs in the directory that math the regex expression
-        runs = [
-            os.path.join(log_path, run) for run in os.scandir(log_path) if run.is_dir() and re.match(run_dir, run.name)
-        ]
+        runs = os.listdir(log_path)
+        if 'exported' in runs: runs.remove('exported')
+        if 'videos' in runs: runs.remove('videos')
+        if 'analysis' in runs: runs.remove('analysis')
         # sort matched runs by alphabetical order (latest run should be last)
         if sort_alpha:
             runs.sort()
@@ -200,9 +254,11 @@ def get_checkpoint_path(
             runs = sorted(runs, key=os.path.getmtime)
         # create last run file path
         if other_dirs is not None:
-            run_path = os.path.join(runs[-1], *other_dirs)
+            run_path = os.path.join(log_path, runs[-1], *other_dirs)
+        elif run_dir != '.*':
+            run_path = os.path.join(log_path, run_dir)
         else:
-            run_path = runs[-1]
+            run_path = os.path.join(log_path, runs[-1])
     except IndexError:
         raise ValueError(f"No runs present in the directory: '{log_path}' match: '{run_dir}'.")
 

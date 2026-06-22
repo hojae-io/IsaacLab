@@ -65,7 +65,7 @@ FRAME_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "frame": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
-            scale=(0.5, 0.5, 0.5),
+            scale=(0.1, 0.1, 0.1),
         ),
         "connecting_line": sim_utils.CylinderCfg(
             radius=0.002,
@@ -81,7 +81,7 @@ RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-            scale=(1.0, 0.1, 0.1),
+            scale=(0.3, 0.3, 0.3),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         )
     }
@@ -93,7 +93,7 @@ BLUE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-            scale=(1.0, 0.1, 0.1),
+            scale=(0.3, 0.3, 0.3),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
         )
     }
@@ -104,13 +104,56 @@ GREEN_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-            scale=(1.0, 0.1, 0.1),
+            scale=(0.3, 0.3, 0.3),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         )
     }
 )
 """Configuration for the green arrow marker (along x-direction)."""
 
+YELLOW_ORANGE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
+    markers={
+        "arrow": sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+            scale=(0.3, 0.3, 0.3),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.71, 0.18)),
+        )
+    }
+)
+"""Configuration for the yellow orange arrow marker (along x-direction)."""
+
+SKY_BLUE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
+    markers={
+        "arrow": sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+            scale=(0.3, 0.3, 0.3),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.239, 0.647, 1.0)),
+        )
+    }
+)
+"""Configuration for the sky blue arrow marker (along x-direction)."""
+
+PINK_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
+    markers={
+        "arrow": sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+            scale=(0.3, 0.3, 0.3),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 1.0)),
+        )
+    }
+)
+"""Configuration for the pink arrow marker (along x-direction)."""
+
+CYAN_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
+    markers={
+        "arrow": sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+            scale=(0.3, 0.3, 0.3),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+        )
+    }
+)
+"""Configuration for the cyan arrow marker (along x-direction)."""
 
 ##
 # Goals.

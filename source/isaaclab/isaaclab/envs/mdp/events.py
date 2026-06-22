@@ -111,6 +111,16 @@ def randomize_rigid_body_scale(
     else:
         rand_samples = math_utils.sample_uniform(*scale_range, (len(env_ids), 1), device="cpu")
         rand_samples = rand_samples.repeat(1, 3)
+    
+    # Store scale factors as asset-specific attribute (tensor shape: [num_envs, 3])
+    # Initialize if it doesn't exist or is None
+    if not hasattr(asset, "_scale_factors") or asset._scale_factors is None:
+        # Initialize with ones for all environments
+        asset._scale_factors = torch.ones((env.scene.num_envs, 3), device=env.device)
+    
+    # Update scale factors for the specified environments
+    asset._scale_factors[env_ids] = rand_samples.to(env.device)
+    
     # convert to list for the for loop
     rand_samples = rand_samples.tolist()
 
@@ -126,30 +136,35 @@ def randomize_rigid_body_scale(
         for i, env_id in enumerate(env_ids):
             # path to prim to randomize
             prim_path = prim_paths[env_id] + relative_child_path
-            # spawn single instance
-            prim_spec = Sdf.CreatePrimInLayer(stage.GetRootLayer(), prim_path)
-
-            # get the attribute to randomize
-            scale_spec = prim_spec.GetAttributeAtPath(prim_path + ".xformOp:scale")
-            # if the scale attribute does not exist, create it
-            has_scale_attr = scale_spec is not None
-            if not has_scale_attr:
-                scale_spec = Sdf.AttributeSpec(prim_spec, prim_path + ".xformOp:scale", Sdf.ValueTypeNames.Double3)
-
-            # set the new scale
-            scale_spec.default = Gf.Vec3f(*rand_samples[i])
-
-            # ensure the operation is done in the right ordering if we created the scale attribute.
-            # otherwise, we assume the scale attribute is already in the right order.
-            # note: by default isaac sim follows this ordering for the transform stack so any asset
-            #   created through it will have the correct ordering
-            if not has_scale_attr:
-                op_order_spec = prim_spec.GetAttributeAtPath(prim_path + ".xformOpOrder")
-                if op_order_spec is None:
-                    op_order_spec = Sdf.AttributeSpec(
-                        prim_spec, UsdGeom.Tokens.xformOpOrder, Sdf.ValueTypeNames.TokenArray
-                    )
-                op_order_spec.default = Vt.TokenArray(["xformOp:translate", "xformOp:orient", "xformOp:scale"])
+            
+            # Get the actual prim (works for both directly spawned and referenced prims)
+            prim = stage.GetPrimAtPath(prim_path)
+            
+            if not prim.IsValid():
+                raise ValueError(f"Prim at path '{prim_path}' is not valid. Cannot apply scale randomization.")
+            
+            xform = UsdGeom.Xformable(prim)
+            
+            # Get existing scale op if it exists
+            scale_op = None
+            existing_ops = xform.GetOrderedXformOps()
+            for op in existing_ops:
+                if op.GetOpType() == UsdGeom.XformOp.TypeScale:
+                    scale_op = op
+                    break
+            
+            # Create scale op if it doesn't exist
+            if scale_op is None:
+                # Add scale op (this creates an override for referenced prims)
+                scale_op = xform.AddScaleOp(UsdGeom.XformOp.PrecisionDouble)
+                
+                # Preserve existing ops and add scale at the end
+                new_order = list(existing_ops)
+                new_order.append(scale_op)
+                xform.SetXformOpOrder(new_order)
+            
+            # Set the scale value
+            scale_op.Set(Gf.Vec3d(*rand_samples[i]))
 
 
 class randomize_rigid_body_material(ManagerTermBase):
@@ -768,7 +783,7 @@ class randomize_joint_parameters(ManagerTermBase):
                 dynamic_friction_coeff = torch.minimum(dynamic_friction_coeff, friction_coeff)
 
                 # Index once at the end
-                dynamic_friction_coeff = dynamic_friction_coeff[env_ids_for_slice, joint_ids]
+                dynamic_frition_coeff = dynamic_friction_coeff[env_ids_for_slice, joint_ids]
                 viscous_friction_coeff = viscous_friction_coeff[env_ids_for_slice, joint_ids]
             else:
                 # For versions < 5.0.0, we do not set these values
@@ -1071,6 +1086,35 @@ def push_by_setting_velocity(
     asset.write_root_velocity_to_sim(vel_w, env_ids=env_ids)
 
 
+def push_by_setting_xy_velocity(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    velocity_range: dict[str, tuple[float, float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Push the asset by setting the root velocity to a random value within the given ranges.
+
+    This creates an effect similar to pushing the asset with a random impulse that changes the asset's velocity.
+    It samples the root velocity from the given ranges and sets the velocity into the physics simulation.
+
+    The function takes a dictionary of velocity ranges for each axis and rotation. The keys of the dictionary
+    are ``x``, ``y``. The values are tuples of the form ``(min, max)``.
+    If the dictionary does not contain a key, the velocity is set to zero for that axis.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+
+    # velocities
+    vel_w = asset.data.root_vel_w[env_ids]
+    # sample random velocities
+    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    vel_w[:, 0:2] = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 2), device=asset.device)
+    
+    # set the velocities into the physics simulation
+    asset.write_root_velocity_to_sim(vel_w, env_ids=env_ids)
+
+
 def reset_root_state_uniform(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,
@@ -1314,6 +1358,68 @@ def reset_joints_by_offset(
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
 
+
+def reset_joints_by_individual_offset(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    position_range: torch.Tensor,
+    velocity_range: torch.Tensor,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the robot joints with offsets around the default position and velocity by the given ranges.
+
+    This function samples random values from the given ranges and biases the default joint positions and velocities
+    by these values. The biased values are then set into the physics simulation.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    position_range = position_range.to(asset.device)
+    velocity_range = velocity_range.to(asset.device)
+
+    # get default joint state
+    joint_pos = asset.data.default_joint_pos[env_ids].clone()
+    joint_vel = asset.data.default_joint_vel[env_ids].clone()
+
+    # bias these values randomly
+    joint_pos += math_utils.sample_uniform(position_range[..., 0], position_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+    joint_vel += math_utils.sample_uniform(velocity_range[..., 0], velocity_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+
+    # clamp joint pos to limits
+    joint_pos_limits = asset.data.soft_joint_pos_limits[env_ids]
+    joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
+    # clamp joint vel to limits
+    joint_vel_limits = asset.data.soft_joint_vel_limits[env_ids]
+    joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
+
+    # set into the physics simulation
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+
+
+def reset_joints_by_range(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    position_range: torch.Tensor,
+    velocity_range: torch.Tensor,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the robot joints by sampling random values from the given ranges.
+
+    This function samples random values from the given ranges and sets them into the physics simulation.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    position_range = position_range.to(asset.device)
+    velocity_range = velocity_range.to(asset.device)
+
+    # get default joint state
+    joint_pos = math_utils.sample_uniform(position_range[..., 0], position_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+    joint_vel = math_utils.sample_uniform(velocity_range[..., 0], velocity_range[..., 1], (len(env_ids), asset.num_joints), device=asset.device)
+
+    # set into the physics simulation
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+   
 
 def reset_nodal_state_uniform(
     env: ManagerBasedEnv,

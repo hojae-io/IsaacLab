@@ -97,6 +97,8 @@ class ActionTermCfg:
     clip: dict[str, tuple] | None = None
     """Clip range for the action (dict of regex expressions). Defaults to None."""
 
+    disable_action: bool = False
+    """Whether to disable the action term. Defaults to False."""
 
 ##
 # Command manager.
@@ -113,7 +115,7 @@ class CommandTermCfg:
     The class should inherit from :class:`isaaclab.managers.command_manager.CommandTerm`.
     """
 
-    resampling_time_range: tuple[float, float] = MISSING
+    resampling_time_range: tuple[float, float] | None = None
     """Time before commands are changed [s]."""
     debug_vis: bool = False
     """Whether to visualize debug information. Defaults to False."""

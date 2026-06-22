@@ -32,3 +32,5 @@ from .recorder_manager import DatasetExportMode, RecorderManager, RecorderManage
 from .reward_manager import RewardManager
 from .scene_entity_cfg import SceneEntityCfg
 from .termination_manager import TerminationManager
+
+from .recorder import RecorderBase, VideoRecorder

@@ -39,6 +39,15 @@ class ContactSensorCfg(SensorBaseCfg):
 
         """
 
+    max_contact_data_count_per_filter_prim: int = 0
+    """The maximum number of contacts across all batches of the sensor to keep track of for each filter primitive. 
+
+    Default is 0.
+
+    This parameter sets the total maximum counts of the simulation across all bodies and environments. The total number
+    of contacts allowed is num_envs * num_sensor_bodies * num_filter_primitives * max_contact_data_count_per_filter_prim.
+    """
+
     track_air_time: bool = False
     """Whether to track the air/contact time of the bodies (time between contacts). Defaults to False."""
 
@@ -77,3 +86,11 @@ class ContactSensorCfg(SensorBaseCfg):
     .. note::
         This attribute is only used when debug visualization is enabled.
     """
+    length_scale: float = 1.0
+    """The scale factor for the length of the contact force arrow. Defaults to 1.0."""
+
+    thickness_scale: float = 1.0
+    """The scale factor for the thickness of the contact force arrow. Defaults to 1.0."""
+
+    reverse_CRF_direction: bool = False
+    """Whether to reverse the direction of the contact reaction force. Defaults to False."""

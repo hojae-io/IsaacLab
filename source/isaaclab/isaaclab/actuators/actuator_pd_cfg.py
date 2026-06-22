@@ -36,6 +36,22 @@ class IdealPDActuatorCfg(ActuatorBaseCfg):
     """Configuration for an ideal PD actuator."""
 
     class_type: type = actuator_pd.IdealPDActuator
+    apply_humanoid_jacobian: bool = False # knee and ankle joints coupling for MIT humanoid
+
+
+@configclass
+class TorqueActuatorCfg(ActuatorBaseCfg):
+    """Configuration for a torque actuator.
+
+    Note:
+        This actuator directly applies torque commands without PD control.
+        Stiffness and damping are not used.
+    """
+
+    class_type: type = actuator_pd.TorqueActuator
+    # we don't use stiffness and damping for torque actuator
+    stiffness = None
+    damping = None
 
 
 @configclass

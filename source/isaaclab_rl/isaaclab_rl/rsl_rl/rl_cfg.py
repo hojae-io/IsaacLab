@@ -25,7 +25,7 @@ class RslRlPpoActorCriticCfg:
     class_name: str = "ActorCritic"
     """The policy class name. Default is ActorCritic."""
 
-    init_noise_std: float = MISSING
+    init_noise_std: float | list[float] = MISSING
     """The initial noise standard deviation for the policy."""
 
     noise_std_type: Literal["scalar", "log"] = "scalar"
@@ -48,6 +48,15 @@ class RslRlPpoActorCriticCfg:
 
     activation: str = MISSING
     """The activation function for the actor and critic networks."""
+
+    normalize_obs: bool = MISSING
+    """Whether to normalize observations."""
+
+    log_std_bounds: list | None = None
+    """The bounds for the log of the standard deviation."""
+
+    custom_initialization: bool = MISSING
+    """Whether to use custom initialization."""
 
 
 @configclass
@@ -79,6 +88,18 @@ class RslRlPpoAlgorithmCfg:
     class_name: str = "PPO"
     """The algorithm class name. Default is PPO."""
 
+    value_loss_coef: float = MISSING
+    """The coefficient for the value loss."""
+
+    use_clipped_value_loss: bool = MISSING
+    """Whether to use clipped value loss."""
+
+    clip_param: float = MISSING
+    """The clipping parameter for the policy."""
+
+    entropy_coef: float = MISSING
+    """The coefficient for the entropy loss."""
+
     num_learning_epochs: int = MISSING
     """The number of learning epochs per update."""
 
@@ -97,36 +118,11 @@ class RslRlPpoAlgorithmCfg:
     lam: float = MISSING
     """The lambda parameter for Generalized Advantage Estimation (GAE)."""
 
-    entropy_coef: float = MISSING
-    """The coefficient for the entropy loss."""
-
     desired_kl: float = MISSING
     """The desired KL divergence."""
 
     max_grad_norm: float = MISSING
     """The maximum gradient norm."""
-
-    value_loss_coef: float = MISSING
-    """The coefficient for the value loss."""
-
-    use_clipped_value_loss: bool = MISSING
-    """Whether to use clipped value loss."""
-
-    clip_param: float = MISSING
-    """The clipping parameter for the policy."""
-
-    normalize_advantage_per_mini_batch: bool = False
-    """Whether to normalize the advantage per mini-batch. Default is False.
-
-    If True, the advantage is normalized over the mini-batches only.
-    Otherwise, the advantage is normalized over the entire collected trajectories.
-    """
-
-    rnd_cfg: RslRlRndCfg | None = None
-    """The RND configuration. Default is None, in which case RND is not used."""
-
-    symmetry_cfg: RslRlSymmetryCfg | None = None
-    """The symmetry configuration. Default is None, in which case symmetry is not used."""
 
 
 #########################
@@ -137,6 +133,9 @@ class RslRlPpoAlgorithmCfg:
 @configclass
 class RslRlBaseRunnerCfg:
     """Base configuration of the runner."""
+
+    class_name: str = MISSING
+    """The runner class name."""
 
     seed: int = 42
     """The seed for the experiment. Default is 42."""
@@ -184,6 +183,9 @@ class RslRlBaseRunnerCfg:
     .. note::
         This clipping is performed inside the :class:`RslRlVecEnvWrapper` wrapper.
     """
+    ##
+    # Checkpointing parameters
+    ##
 
     save_interval: int = MISSING
     """The number of iterations between saves."""
@@ -239,3 +241,17 @@ class RslRlOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
 
     algorithm: RslRlPpoAlgorithmCfg = MISSING
     """The algorithm configuration."""
+
+
+@configclass
+class RslRlModularOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
+    """Configuration of the runner for modular on-policy algorithms."""
+
+    class_name: str = "ModularOnPolicyRunner"
+    """The runner class name. Default is ModularOnPolicyRunner."""
+
+    policies: dict[str, RslRlPpoActorCriticCfg] = MISSING
+    """The policies configuration."""
+
+    algorithms: dict[str, RslRlPpoAlgorithmCfg] = MISSING
+    """The algorithms configuration."""

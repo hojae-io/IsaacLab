@@ -23,10 +23,12 @@ if TYPE_CHECKING:
         IdealPDActuatorCfg,
         ImplicitActuatorCfg,
         RemotizedPDActuatorCfg,
+        TorqueActuatorCfg,
     )
 
 # import logger
 logger = logging.getLogger(__name__)
+from .jacobian import apply_coupling
 
 """
 Implicit Actuator Models.
@@ -180,17 +182,89 @@ class IdealPDActuator(ActuatorBase):
     Operations.
     """
 
+    def __init__(self, cfg, joint_names, joint_ids, num_envs, device, stiffness = 0, damping = 0, armature = 0, friction = 0, dynamic_friction = 0, viscous_friction = 0, effort_limit = torch.inf, velocity_limit = torch.inf):
+        super().__init__(cfg, joint_names, joint_ids, num_envs, device, stiffness, damping, armature, friction, dynamic_friction, viscous_friction, effort_limit, velocity_limit)
+        
+        if self.cfg.apply_humanoid_jacobian:
+            self.J = torch.eye(len(joint_names), device=device)  # Placeholder for Jacobian matrix
+            self.J[8, 6] = 1  # Right knee and ankle joint coupling
+            self.J[9, 7] = 1  # Left knee and ankle joint coupling
+            self.J_inv_T = torch.inverse(self.J.T)  # Inverse of the transpose of Jacobian
+
+            self.stiffness_coupled = torch.diagonal(self.J_inv_T @ torch.diag_embed(self.stiffness, dim1=-2, dim2=-1) @ self.J_inv_T.T, dim1=-2, dim2=-1)
+            self.damping_coupled = torch.diagonal(self.J_inv_T @ torch.diag_embed(self.damping, dim1=-2, dim2=-1) @ self.J_inv_T.T, dim1=-2, dim2=-1)
+
     def reset(self, env_ids: Sequence[int]):
         pass
 
     def compute(
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
     ) -> ArticulationActions:
-        # compute errors
-        error_pos = control_action.joint_positions - joint_pos
-        error_vel = control_action.joint_velocities - joint_vel
+        if self.cfg.apply_humanoid_jacobian:
+            q = torch.matmul(joint_pos, self.J.T)
+            qd = torch.matmul(joint_vel, self.J.T)
+            q_des = torch.matmul(control_action.joint_positions, self.J.T)
+            qd_des = torch.matmul(control_action.joint_velocities, self.J.T)
+            tau_ff = torch.matmul(self.J_inv_T, control_action.joint_efforts.T).T
+
+            torques = self.stiffness_coupled*(q_des - q) + self.damping_coupled*(qd_des - qd) + tau_ff
+            self.computed_effort = torch.matmul(torques, self.J)
+
+        else:
+            # compute errors
+            error_pos = control_action.joint_positions - joint_pos
+            error_vel = control_action.joint_velocities - joint_vel
+            # calculate the desired joint torques
+            self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        
+        # clip the torques based on the motor limits
+        self.applied_effort = self._clip_effort(self.computed_effort)
+        # set the computed actions back into the control action
+        control_action.joint_efforts = self.applied_effort
+        control_action.joint_positions = None
+        control_action.joint_velocities = None
+        return control_action
+
+
+class TorqueActuator(ActuatorBase):
+    r"""Torque-controlled actuator model with a simple saturation model.
+
+    It employs the following model for computing torques for the actuated joint :math:`j`:
+
+    .. math::
+
+        \tau_{j, computed} = \tau_{ff}
+
+    :math:`\tau_{ff}` is the joint effort target (direct torques commands).
+
+    The clipping model is based on the maximum torque applied by the motor. It is implemented as:
+
+    .. math::
+
+        \tau_{j, max} & = \gamma \times \tau_{motor, max} \\
+        \tau_{j, applied} & = clip(\tau_{computed}, -\tau_{j, max}, \tau_{j, max})
+
+    where the clipping function is defined as :math:`clip(x, x_{min}, x_{max}) = min(max(x, x_{min}), x_{max})`.
+    The parameters :math:`\gamma` is the gear ratio of the gear box connecting the motor and the actuated joint ends,
+    and :math:`\tau_{motor, max}` is the maximum motor effort possible. These parameters are read from
+    the configuration instance passed to the class.
+    """
+
+    cfg: TorqueActuatorCfg
+    """The configuration for the actuator model."""
+
+    """
+    Operations.
+    """
+
+    def reset(self, env_ids: Sequence[int]):
+        pass
+
+    def compute(
+        self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
+    ) -> ArticulationActions:
         # calculate the desired joint torques
-        self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        self.computed_effort = control_action.joint_efforts
         # clip the torques based on the motor limits
         self.applied_effort = self._clip_effort(self.computed_effort)
         # set the computed actions back into the control action
