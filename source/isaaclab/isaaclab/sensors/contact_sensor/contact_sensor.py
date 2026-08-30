@@ -150,6 +150,9 @@ class ContactSensor(SensorBase):
             - D is the maximum number of contact data per filter primitive 
             - 1 is the dimension of the force magnitude.
         """
+        # SensorBase.update() only refreshes buffers when the sensor is visualizing or
+        # keeps a history, so refresh here as the `data` property does.
+        self._update_outdated_buffers()
         return self._data.contact_forces_buffer
 
     @property
@@ -165,6 +168,7 @@ class ContactSensor(SensorBase):
             - D is the maximum number of contact data per filter primitive 
             - 3 is the dimension of the force vector.
         """
+        self._update_outdated_buffers()
         return self._data.friction_forces_buffer
 
     @property
@@ -180,6 +184,7 @@ class ContactSensor(SensorBase):
             - D is the maximum number of contact data per filter primitive 
             - 3 is the dimension of the force vector.
         """
+        self._update_outdated_buffers()
         return self._data.CRF_forces_buffer
 
     @property
@@ -195,6 +200,7 @@ class ContactSensor(SensorBase):
             - D is the maximum number of contact data per filter primitive 
             - 3 is the dimension of the point vector.
         """
+        self._update_outdated_buffers()
         return self._data.CRF_points_buffer
 
     """
