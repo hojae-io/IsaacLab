@@ -453,6 +453,7 @@ class ContactSensor(SensorBase):
         # default to all sensors
         if len(env_ids) == self._num_envs:
             env_ids = slice(None)
+        num_sel = self._num_envs if isinstance(env_ids, slice) else len(env_ids)
 
         # obtain the contact forces
         # TODO: We are handling the indexing ourself because of the shape; (N, B) vs expected (N * B).
@@ -484,8 +485,8 @@ class ContactSensor(SensorBase):
                     contact_start_indices,          # Shape: (N * B, M)
                 ) = self.contact_physx_view.get_contact_data(dt=self._sim_physics_dt)
 
-                contact_count = contact_count[env_ids].view(self._num_envs, self._num_bodies, num_filters)
-                contact_start_indices = contact_start_indices[env_ids].view(self._num_envs, self._num_bodies, num_filters)
+                contact_count = contact_count[env_ids].view(num_sel, self._num_bodies, num_filters)
+                contact_start_indices = contact_start_indices[env_ids].view(num_sel, self._num_bodies, num_filters)
 
                 rel_idx = torch.arange(self.cfg.max_contact_data_count_per_filter_prim, device=self.device).view(
                     1, 1, 1, self.cfg.max_contact_data_count_per_filter_prim)  # Shape: (1, 1, 1, D)
@@ -519,8 +520,8 @@ class ContactSensor(SensorBase):
                     friction_start_indices,     # Shape: (N * B, M)
                 ) = self.contact_physx_view.get_friction_data(dt=self._sim_physics_dt)
 
-                friction_count = friction_count[env_ids].view(self._num_envs, self._num_bodies, num_filters)
-                friction_start_indices = friction_start_indices[env_ids].view(self._num_envs, self._num_bodies, num_filters)
+                friction_count = friction_count[env_ids].view(num_sel, self._num_bodies, num_filters)
+                friction_start_indices = friction_start_indices[env_ids].view(num_sel, self._num_bodies, num_filters)
                 
                 friction_mask = rel_idx < friction_count.unsqueeze(-1)  # Shape: (N, B, M, D)
                 friction_full_idx = friction_start_indices.unsqueeze(-1) + rel_idx  # Shape: (N, B, M, D)
