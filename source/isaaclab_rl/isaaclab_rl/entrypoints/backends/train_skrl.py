@@ -114,7 +114,8 @@ def _run(args_cli: argparse.Namespace) -> None:
 
             experiment_cfg = agent_cfg["agent"]["experiment"]
             log_root_path = os.path.abspath(os.path.join("logs", "skrl", experiment_cfg["directory"]))
-            print(f"[INFO] Logging experiment in directory: {log_root_path}")
+            if not args_cli.disable_logging:
+                print(f"[INFO] Logging experiment in directory: {log_root_path}")
             run_name = (
                 args_cli.run_timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             ) + f"_{algorithm}_{args_cli.ml_framework}"
@@ -132,9 +133,14 @@ def _run(args_cli: argparse.Namespace) -> None:
                 "ml_framework": args_cli.ml_framework,
             }
             # All ranks share the run folder, so its manifest is written once.
-            if rank in (None, 0):
+            if args_cli.disable_logging:
+                experiment_cfg["write_interval"] = 0
+                experiment_cfg["checkpoint_interval"] = 0
+                experiment_cfg["wandb"] = False
+            elif rank in (None, 0):
                 write_run_manifest(log_dir, library="skrl", task=args_cli.task, metadata=manifest_metadata)
-            dump_train_configs(rank_dir, env_cfg, agent_cfg)
+            if not args_cli.disable_logging:
+                dump_train_configs(rank_dir, env_cfg, agent_cfg)
 
             if args_cli.checkpoint in CHECKPOINT_SELECTORS:
                 resume_path = resolve_checkpoint_selector(
@@ -182,7 +188,7 @@ def _run(args_cli: argparse.Namespace) -> None:
             with contextlib.suppress(KeyboardInterrupt):
                 runner.run()
                 print(f"Training time: {round(time.time() - start_time, 2)} seconds")
-                if rank in (None, 0):
+                if rank in (None, 0) and not args_cli.disable_logging:
                     total_timesteps = agent_cfg["trainer"]["timesteps"]
                     os.makedirs(os.path.join(log_dir, "checkpoints"), exist_ok=True)
                     runner.agent.write_checkpoint(timestep=total_timesteps, timesteps=total_timesteps)

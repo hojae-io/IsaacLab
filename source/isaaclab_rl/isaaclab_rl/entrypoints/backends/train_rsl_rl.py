@@ -143,7 +143,8 @@ def _run(args_cli: argparse.Namespace) -> None:
             env_cfg.seed = agent_cfg.seed
 
             log_root_path = os.path.abspath(os.path.join("logs", "rsl_rl", agent_cfg.experiment_name))
-            print(f"[INFO] Logging experiment in directory: {log_root_path}")
+            if not args_cli.disable_logging:
+                print(f"[INFO] Logging experiment in directory: {log_root_path}")
             run_name = args_cli.run_timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             print(f"Exact experiment name requested from command line: {run_name}")
             if agent_cfg.run_name:
@@ -152,7 +153,7 @@ def _run(args_cli: argparse.Namespace) -> None:
             # rank 0 writes its settings and videos where a single-GPU run does; other ranks use rank_<rank>/
             rank_dir = log_dir if rank in (None, 0) else os.path.join(log_dir, f"rank_{rank}")
             # All ranks share the run folder, so its manifest is written once.
-            if rank in (None, 0):
+            if rank in (None, 0) and not args_cli.disable_logging:
                 write_run_manifest(log_dir, library="rsl_rl", task=args_cli.task, metadata={"agent": args_cli.agent})
 
             resume_path = _resolve_checkpoint(args_cli, agent_cfg, log_root_path)
@@ -175,7 +176,7 @@ def _run(args_cli: argparse.Namespace) -> None:
             env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
             report_activity(None)
             report_activity("Building policy")
-            runner = create_rsl_rl_runner(env, agent_cfg, log_dir=log_dir)
+            runner = create_rsl_rl_runner(env, agent_cfg, log_dir=None if args_cli.disable_logging else log_dir)
             report_activity(None)
 
             # configure_seed must run after runner construction so torch determinism does not disturb its initialization
@@ -193,9 +194,10 @@ def _run(args_cli: argparse.Namespace) -> None:
                     ),
                     map_location=agent_cfg.device,
                 )
-            dump_train_configs(rank_dir, env_cfg, agent_cfg)
+            if not args_cli.disable_logging:
+                dump_train_configs(rank_dir, env_cfg, agent_cfg)
 
-            if agent_cfg.logger == "wandb":
+            if agent_cfg.logger == "wandb" and not args_cli.disable_logging:
                 announce_new_run(agent_cfg.wandb_project, resolve_wandb_entity())
 
             screen.close()

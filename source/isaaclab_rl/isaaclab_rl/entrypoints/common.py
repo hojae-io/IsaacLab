@@ -195,6 +195,12 @@ def add_common_train_args(
         "--max_iterations", type=max_iterations_type, default=None, help="RL Policy training iterations."
     )
     parser.add_argument(
+        "--disable_logging",
+        action="store_true",
+        default=False,
+        help="Do not create the run directory: no config dumps, checkpoints, TensorBoard or W&B output.",
+    )
+    parser.add_argument(
         "--export_io_descriptors",
         action="store_true",
         default=False,
