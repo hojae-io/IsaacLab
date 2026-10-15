@@ -891,6 +891,13 @@ class SimulationContext:
             requested |= viz.consume_reset_request()
         return requested
 
+    def consume_resample_request(self) -> bool:
+        """Return ``True`` if any visualizer requested new commands and clear the flags."""
+        requested = False
+        for viz in self._visualizers:
+            requested |= viz.consume_resample_request()
+        return requested
+
     def is_playing(self) -> bool:
         """Returns True if simulation is playing (not paused or stopped)."""
         return self._is_playing

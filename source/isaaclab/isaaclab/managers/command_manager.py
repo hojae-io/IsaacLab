@@ -353,6 +353,17 @@ class CommandManager(ManagerBase):
         # return logged information
         return extras
 
+    def resample(self, env_ids: Sequence[int] | slice | None = None):
+        """Draw new commands for the given environments without resetting them.
+
+        Args:
+            env_ids: The list of environment IDs to resample. Defaults to None, which resamples all.
+        """
+        if env_ids is None:
+            env_ids = slice(None)
+        for term in self._terms.values():
+            term._resample(env_ids)
+
     def compute(self, dt: float):
         """Updates the commands.
 

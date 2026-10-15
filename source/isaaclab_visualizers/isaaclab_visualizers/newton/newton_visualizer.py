@@ -331,6 +331,12 @@ class _NewtonViewerUIMixin:
         self._reset_requested = False
         return requested
 
+    def consume_resample_request(self) -> bool:
+        """Return whether new commands were requested and clear the flag."""
+        requested = self._resample_requested
+        self._resample_requested = False
+        return requested
+
     def _patch_viewer_panel(self) -> None:
         """Replace Newton's left panel with an IsaacLab-oriented layout.
 
@@ -560,6 +566,8 @@ class _NewtonViewerUIMixin:
 
         if imgui.button("Reset Episode (R)"):
             self._reset_requested = True
+        if imgui.button("Resample Commands (C)"):
+            self._resample_requested = True
 
         imgui.text("Visualizer Update Frequency")
         current_frequency = self._update_frequency
@@ -706,6 +714,7 @@ class NewtonViewerRTX(_NewtonViewerUIMixin, ViewerRTX):
         self._paused_training = False
         self._paused_rendering = False
         self._reset_requested = False
+        self._resample_requested = False
         self._metadata = metadata or {}
         self._update_frequency = update_frequency
         self._color_edit3_prefers_sequence: bool | None = None
@@ -842,6 +851,7 @@ class NewtonViewerGL(_NewtonViewerUIMixin, ViewerGL):
         super().__init__(*args, **kwargs)
         self._paused_training = False
         self._reset_requested = False
+        self._resample_requested = False
         self._metadata = metadata or {}
         self._update_frequency = update_frequency
         self._color_edit3_prefers_sequence: bool | None = None
@@ -870,12 +880,16 @@ class NewtonViewerGL(_NewtonViewerUIMixin, ViewerGL):
         self._close_requested = False
 
     def on_key_press(self, symbol: int, modifiers: int):
-        """Handle key presses; ``R`` requests an episode reset like the "Reset Episode" button."""
+        """Handle key presses; ``R`` requests an episode reset and ``C`` new commands, like the panel buttons."""
         super().on_key_press(symbol, modifiers)
         from pyglet.window import key
 
-        if symbol == key.R and not (self.gui and self.gui.is_keyboard_capturing()):
+        if self.gui and self.gui.is_keyboard_capturing():
+            return
+        if symbol == key.R:
             self._reset_requested = True
+        elif symbol == key.C:
+            self._resample_requested = True
 
     def is_training_paused(self) -> bool:
         """Return whether simulation is paused by viewer controls."""
@@ -1370,6 +1384,12 @@ class NewtonVisualizer(BaseVisualizer):
         """Return whether an episode reset was requested and clear the flag."""
         if self._viewer is not None:
             return self._viewer.consume_reset_request()
+        return False
+
+    def consume_resample_request(self) -> bool:
+        """Return whether new commands were requested and clear the flag."""
+        if self._viewer is not None:
+            return self._viewer.consume_resample_request()
         return False
 
     def reset(self, soft: bool = False) -> None:

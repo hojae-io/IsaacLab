@@ -55,6 +55,7 @@ class BaseVisualizer(ABC):
         self._live_plot_env_idx: int = 0
         self._live_plots_step_counter: int = 0
         self._reset_requested: bool = False
+        self._resample_requested: bool = False
         # Declare the camera renderer before cloning gathers consumer requirements.
         owns_camera = cfg.streaming_sensor_prim_path is None and cfg.streaming_cam_target_prim_path is not None
         if cfg.streaming_view and owns_camera:
@@ -140,6 +141,12 @@ class BaseVisualizer(ABC):
         """
         requested = self._reset_requested
         self._reset_requested = False
+        return requested
+
+    def consume_resample_request(self) -> bool:
+        """Return whether new commands were requested from visualizer controls and clear the flag."""
+        requested = self._resample_requested
+        self._resample_requested = False
         return requested
 
     @property
