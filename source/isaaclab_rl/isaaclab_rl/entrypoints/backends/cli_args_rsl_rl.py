@@ -52,11 +52,18 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser) -> None:
     )
     arg_group.add_argument("--run_name", type=str, default=None, help="Run name suffix to the log directory.")
     arg_group.add_argument(
+        "--load_run",
+        type=str,
+        default=None,
+        help="Run folder name under logs/<library>/<experiment>. Defaults to the latest run of the task.",
+    )
+    arg_group.add_argument(
         "--checkpoint",
         type=str,
         default=None,
         help=(
-            "Checkpoint path, latest/best, pretrained for play, or a Weights & Biases run"
+            "Checkpoint file name within the run, such as model_1000.pt. Defaults to the latest checkpoint."
+            " Also accepts a checkpoint path, pretrained for play, or a Weights & Biases run"
             " (https://wandb.ai/<entity>/<project>/runs/<run_id>, optionally with a '?checkpoint=<iteration>' query,"
             " or the wandb:<entity>/<project>/<run_id> shorthand)."
         ),
@@ -119,6 +126,8 @@ def update_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg, args_cli: argparse.Namespac
     if getattr(args_cli, "seed", None) is not None:
         args_cli.seed = resolve_seed(args_cli.seed)
         agent_cfg.seed = args_cli.seed
+    if args_cli.load_run is not None:
+        agent_cfg.load_run = args_cli.load_run
     if args_cli.checkpoint is not None:
         agent_cfg.load_checkpoint = args_cli.checkpoint
     if args_cli.experiment_name is not None:

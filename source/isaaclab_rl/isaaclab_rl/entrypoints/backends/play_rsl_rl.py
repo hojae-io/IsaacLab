@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import os
+import re
 
 from isaaclab.app import add_launcher_args, launch_simulation
 from isaaclab.envs import DirectMARLEnvCfg
@@ -75,27 +76,28 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def _resolve_checkpoint(
     args_cli: argparse.Namespace, agent_cfg: RslRlBaseRunnerCfg, env_cfg: object, log_root_path: str
 ) -> str | None:
-    """Resolve the checkpoint to play, or None when no published checkpoint exists."""
+    """Resolve ``<log_root>/<load_run>/<checkpoint>``, defaulting to the task's latest run and its latest checkpoint."""
     if args_cli.checkpoint and is_wandb_checkpoint(args_cli.checkpoint):
         return resolve_wandb_checkpoint(args_cli.checkpoint)
     if args_cli.checkpoint == "pretrained":
         return resolve_published_checkpoint("rsl_rl", args_cli.task, env_cfg)
-    if args_cli.checkpoint in CHECKPOINT_SELECTORS:
-        return resolve_checkpoint_selector(
+    if args_cli.checkpoint and os.path.isfile(args_cli.checkpoint):
+        return retrieve_file_path(args_cli.checkpoint)
+    if args_cli.load_run is None:
+        latest = resolve_checkpoint_selector(
             log_root_path,
-            args_cli.checkpoint,
+            "latest",
             library="rsl_rl",
             task=normalize_task_name(args_cli.task),
             checkpoint_pattern=r"model_.*\.pt",
             metadata={"agent": args_cli.agent},
         )
-    if args_cli.checkpoint and os.path.isdir(args_cli.checkpoint):
-        return get_checkpoint_path(
-            os.path.dirname(args_cli.checkpoint), os.path.basename(args_cli.checkpoint), agent_cfg.load_checkpoint
-        )
-    if args_cli.checkpoint:
-        return retrieve_file_path(args_cli.checkpoint)
-    return get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        run_dir = os.path.dirname(latest)
+    else:
+        run_dir = os.path.join(log_root_path, args_cli.load_run)
+    explicit = args_cli.checkpoint not in (None, *CHECKPOINT_SELECTORS)
+    checkpoint = re.escape(args_cli.checkpoint) + "$" if explicit else r"model_.*\.pt"
+    return get_checkpoint_path(os.path.dirname(run_dir), re.escape(os.path.basename(run_dir)) + "$", checkpoint)
 
 
 def run(argv: list[str]) -> None:
