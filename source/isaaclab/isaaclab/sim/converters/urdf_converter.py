@@ -113,7 +113,17 @@ class UrdfConverter(AssetConverterBase):
             debug_mode=cfg.debug_mode,
         )
 
-        generated_usd_path = URDFImporter(import_config).import_urdf()
+        # the importer emits usd-exchange status diagnostics for every stage it writes; keep only warnings
+        import usdex.core  # noqa: PLC0415
+
+        usdex.core.activateDiagnosticsDelegate()
+        usdex.core.setDiagnosticsLevel(
+            usdex.core.DiagnosticsLevel.eStatus if cfg.debug_mode else usdex.core.DiagnosticsLevel.eWarning
+        )
+        try:
+            generated_usd_path = URDFImporter(import_config).import_urdf()
+        finally:
+            usdex.core.deactivateDiagnosticsDelegate()
         if generated_usd_path:
             generated_usd_path = os.path.normpath(generated_usd_path)
             self._usd_file_name = os.path.relpath(generated_usd_path, self.usd_dir)
