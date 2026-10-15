@@ -558,7 +558,7 @@ class _NewtonViewerUIMixin:
             if imgui.button(rendering_label):
                 self._paused = not self._paused
 
-        if imgui.button("Reset Episode"):
+        if imgui.button("Reset Episode (R)"):
             self._reset_requested = True
 
         imgui.text("Visualizer Update Frequency")
@@ -868,6 +868,14 @@ class NewtonViewerGL(_NewtonViewerUIMixin, ViewerGL):
 
         self.register_ui_callback(self._render_training_controls, position="side")
         self._close_requested = False
+
+    def on_key_press(self, symbol: int, modifiers: int):
+        """Handle key presses; ``R`` requests an episode reset like the "Reset Episode" button."""
+        super().on_key_press(symbol, modifiers)
+        from pyglet.window import key
+
+        if symbol == key.R and not (self.gui and self.gui.is_keyboard_capturing()):
+            self._reset_requested = True
 
     def is_training_paused(self) -> bool:
         """Return whether simulation is paused by viewer controls."""
